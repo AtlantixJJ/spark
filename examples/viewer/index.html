@@ -286,7 +286,7 @@
     }
 
     let params = new URLSearchParams(document.location.search);
-    let splatURL = params.get("url");
+    let splatURL = params.get("url") || params.get("path");
 
     if (splatURL) { loadSplatURL(splatURL); }
 
@@ -353,7 +353,7 @@
       <label for="file-input" class="button upload"><img class="upload-icon" src="upload-icon.svg" alt="upload" />Choose file</label>
       <input id="file-input" class="hidden" accept=".ply,.spz,.splat,.ksplat,.zip" type="file" />
       <form class="url-form">
-        <input class="url-input" type="text" placeholder="Copy splat URL" />
+        <input class="url-input" type="text" placeholder="URL or local path (e.g. /local/expr/UV-CC-HR-RoPE/viz/scene.spz)" />
       </form>
     </div>
   </div>

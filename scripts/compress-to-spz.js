@@ -5,10 +5,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { URL } from "node:url";
 
-// Import directly from source to avoid worker system
-import { transcodeSpz } from "../dist/spark.module.js";
-
 async function main() {
+  if (globalThis.navigator == null) {
+    globalThis.navigator = { xr: null };
+  }
+
+  // Import lazily after installing a Node-safe navigator shim.
+  const { transcodeSpz } = await import("../dist/spark.module.js");
+
   const args = process.argv.slice(2);
   if (args.length === 0 || args.includes("-h") || args.includes("--help")) {
     console.log(`Usage: to-spz.js [options] <file_or_url>...

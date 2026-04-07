@@ -112,6 +112,51 @@ export default defineConfig(({ mode }) => {
           console.log(`📦 Dev alias active: ${baseUrlPath} → node_modules/*`);
         },
       },
+      {
+        name: "serve-local-files",
+        configureServer(server) {
+          const urlPrefix = "/local/";
+          const fsRoot = "/home/jianjinx/data2/SAM3DGS/";
+
+          server.middlewares.use((req, res, next) => {
+            const url = req.url?.split("?")[0] ?? "";
+            if (!url.startsWith(urlPrefix)) return next();
+
+            const relPath = url.slice(urlPrefix.length);
+            // Prevent path traversal outside fsRoot
+            const absPath = path.resolve(fsRoot, relPath);
+            if (!absPath.startsWith(path.resolve(fsRoot))) {
+              res.statusCode = 403;
+              res.end("Forbidden");
+              return;
+            }
+
+            if (fs.existsSync(absPath) && fs.statSync(absPath).isFile()) {
+              const ext = path.extname(absPath).toLowerCase();
+              const contentType =
+                {
+                  ".js": "application/javascript",
+                  ".json": "application/json",
+                  ".ply": "application/octet-stream",
+                  ".spz": "application/octet-stream",
+                  ".splat": "application/octet-stream",
+                  ".ksplat": "application/octet-stream",
+                  ".png": "image/png",
+                  ".jpg": "image/jpeg",
+                  ".jpeg": "image/jpeg",
+                }[ext] ?? "application/octet-stream";
+
+              res.setHeader("Content-Type", contentType);
+              fs.createReadStream(absPath).pipe(res);
+            } else {
+              res.statusCode = 404;
+              res.end(`Not found: ${relPath}`);
+            }
+          });
+
+          console.log(`📁 Local files active: ${urlPrefix} → ${fsRoot}`);
+        },
+      },
     ],
 
     build: {

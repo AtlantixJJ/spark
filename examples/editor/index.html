@@ -158,7 +158,7 @@
             loadFiles(urls);
             guiOptions.loadFromText = ""; // Clear after loading
           } else {
-            alert("No valid URLs found in text. URLs must start with http:// or https:// and end with .ply, .spz, .splat, .ksplat, .json, or .zip");
+            alert("No valid paths found in text. Must start with http://, https://, or /local/ and end with .ply, .spz, .splat, .ksplat, .json, or .zip");
           }
         }
       },
@@ -184,9 +184,9 @@
       const urlParams = new URLSearchParams(window.location.search);
       const urls = [];
 
-      // Get all "url" parameters
+      // Get all "url" and "path" parameters
       for (const [key, value] of urlParams.entries()) {
-        if (key === "url") {
+        if (key === "url" || key === "path") {
           urls.push(value);
         }
       }
@@ -447,8 +447,8 @@
     secondGui.add(guiOptions, "resetOnLoad").name("Reset on load");
     secondGui.add(guiOptions, "loadOffset", -2, 2, 0.01).name("Loading offset");
     secondGui.add(guiOptions, "openFiles").name("Select Files");
-    secondGui.add(guiOptions, "loadFromText").name("Paste URL(s) here");
-    secondGui.add(guiOptions, "loadFromTextAction").name("Load from URL(s)");
+    secondGui.add(guiOptions, "loadFromText").name("Paste URL or /local/ path");
+    secondGui.add(guiOptions, "loadFromTextAction").name("Load from URL/path");
 
     cameraFolder.add(guiOptions, "resetPose").name("Reset pose");
     cameraFolder.add(guiOptions, "openCv").name("OpenCV coordinates")
@@ -774,9 +774,10 @@
       for (const part of parts) {
         const trimmed = part.trim();
 
-        // Check if part looks like a URL
-        if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-          // Check if it has a supported extension
+        const isRemoteUrl = trimmed.startsWith('http://') || trimmed.startsWith('https://');
+        const isLocalPath = trimmed.startsWith('/local/');
+
+        if (isRemoteUrl || isLocalPath) {
           const hasValidExtension = supportedExtensions.some(ext =>
             trimmed.toLowerCase().includes(ext)
           );
