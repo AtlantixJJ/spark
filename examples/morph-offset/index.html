@@ -44,13 +44,10 @@
   <div id="gui-container"></div>
   <div id="instructions">
     <h1>Offset Morph Viewer</h1>
-    <p>1. Load Anchor PLY (canonical_rotation.ply)</p>
-    <p>2. Load Delta PLY (offset_delta.ply)</p>
-    <p>3. Use Alpha slider to morph</p>
+    <p>1. Edit anchor and delta paths in the panel</p>
+    <p>2. Click Load Morph Pair</p>
+    <p>3. Use the morph sliders</p>
   </div>
-
-  <input id="anchor-input" type="file" accept=".ply" style="display: none;" />
-  <input id="delta-input" type="file" accept=".ply" style="display: none;" />
 
   <script type="importmap">
     {
@@ -67,9 +64,14 @@
     import * as THREE from "three";
     import { OrbitControls } from "three/addons/controls/OrbitControls.js";
     import { GUI } from "lil-gui";
-    import { SparkRenderer, SplatMesh, dyno, isMobile } from "@sparkjsdev/spark";
+    import { SparkRenderer, SplatMesh, dyno } from "@sparkjsdev/spark";
+
+    const DEFAULT_ANCHOR_URL = "/local/expr/UV-CC-HR-RoPE/viz/PT_10524_canonical_rotation.ply";
+    const DEFAULT_DELTA_URL = "/local/expr/UV-CC-HR-RoPE/viz/PT_10524_offset_delta.ply";
+    const urlParams = new URLSearchParams(window.location.search);
 
     const scene = new THREE.Scene();
+    scene.background = new THREE.Color("#000000");
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
     camera.position.set(0, 0, 2);
 
@@ -93,11 +95,16 @@
 
     const gui = new GUI({ container: document.getElementById("gui-container") });
     const settings = {
+      anchorPath: urlParams.get("anchor") || DEFAULT_ANCHOR_URL,
+      deltaPath: urlParams.get("delta") || DEFAULT_DELTA_URL,
       alpha: 0,
+      scaleAlpha: 1,
+      opacityAlpha: 1,
       autoRotate: false,
       backgroundColor: "#000000",
-      loadAnchor: () => document.getElementById("anchor-input").click(),
-      loadDelta: () => document.getElementById("delta-input").click(),
+      loadMorphPair: async () => {
+        await loadMorphPair(settings.anchorPath, settings.deltaPath);
+      },
       resetCamera: () => {
         camera.position.set(0, 0, 2);
         orbitControls.target.set(0, 0, 0);
@@ -105,76 +112,153 @@
       }
     };
 
-    gui.add(settings, "loadAnchor").name("1. Load Anchor PLY");
-    gui.add(settings, "loadDelta").name("2. Load Delta PLY").disable();
-    const alphaController = gui.add(settings, "alpha", 0, 1, 0.01).name("Alpha Morph").disable();
+    gui.add(settings, "anchorPath").name("Anchor Path");
+    gui.add(settings, "deltaPath").name("Delta Path");
+    gui.add(settings, "loadMorphPair").name("Load Morph Pair");
+    const alphaController = gui.add(settings, "alpha", 0, 1, 0.01).name("Position Morph").disable();
+    const scaleController = gui
+      .add(settings, "scaleAlpha", 0, 1, 0.01)
+      .name("Scale Morph")
+      .disable();
+    const opacityController = gui
+      .add(settings, "opacityAlpha", 0, 1, 0.01)
+      .name("Opacity Morph")
+      .disable();
     gui.add(settings, "autoRotate").name("Auto Rotate");
     gui.addColor(settings, "backgroundColor").name("Background").onChange(v => scene.background.set(v));
     gui.add(settings, "resetCamera").name("Reset Camera");
 
     let anchorMesh = null;
     let deltaMesh = null;
-    const alphaDyno = dyno.dynoFloat(0);
+    const positionAlphaDyno = dyno.dynoFloat(settings.alpha);
+    const scaleAlphaDyno = dyno.dynoFloat(settings.scaleAlpha);
+    const opacityAlphaDyno = dyno.dynoFloat(settings.opacityAlpha);
 
     alphaController.onChange(v => {
-      alphaDyno.value = v;
-      if (anchorMesh) anchorMesh.updateVersion();
+      positionAlphaDyno.value = v;
+      if (anchorMesh && deltaMesh) anchorMesh.updateVersion();
     });
 
-    document.getElementById("anchor-input").onchange = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      
+    scaleController.onChange(v => {
+      scaleAlphaDyno.value = v;
+      if (anchorMesh && deltaMesh) anchorMesh.updateVersion();
+    });
+
+    opacityController.onChange(v => {
+      opacityAlphaDyno.value = v;
+      if (anchorMesh && deltaMesh) anchorMesh.updateVersion();
+    });
+
+    function resetMorphControls() {
+      settings.alpha = 0;
+      settings.scaleAlpha = 1;
+      settings.opacityAlpha = 1;
+      positionAlphaDyno.value = settings.alpha;
+      scaleAlphaDyno.value = settings.scaleAlpha;
+      opacityAlphaDyno.value = settings.opacityAlpha;
+      alphaController.updateDisplay();
+      scaleController.updateDisplay();
+      opacityController.updateDisplay();
+      alphaController.disable();
+      scaleController.disable();
+      opacityController.disable();
+    }
+
+    function clearAnchorMesh() {
       if (anchorMesh) {
         scene.remove(anchorMesh);
         anchorMesh = null;
       }
-      
-      const fileBytes = new Uint8Array(await file.arrayBuffer());
-      anchorMesh = new SplatMesh({ fileBytes, fileName: file.name });
+      deltaMesh = null;
+      resetMorphControls();
+    }
+
+    function hideInstructions() {
+      document.getElementById("instructions").style.display = "none";
+    }
+
+    async function setAnchorMesh(init) {
+      clearAnchorMesh();
+      anchorMesh = new SplatMesh(init);
       await anchorMesh.initialized;
       scene.add(anchorMesh);
-      
-      gui.controllers.find(c => c._name === "2. Load Delta PLY").enable();
-      document.getElementById("instructions").style.display = "none";
-    };
+      hideInstructions();
+    }
 
-    document.getElementById("delta-input").onchange = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      if (!anchorMesh) return;
-
-      const fileBytes = new Uint8Array(await file.arrayBuffer());
-      deltaMesh = new SplatMesh({ fileBytes, fileName: file.name });
-      await deltaMesh.initialized;
-
-      // Ensure splat counts match
-      if (anchorMesh.numSplats !== deltaMesh.numSplats) {
-        alert(`Splat count mismatch! Anchor: ${anchorMesh.numSplats}, Delta: ${deltaMesh.numSplats}`);
-        return;
-      }
-
-      const deltaPSDyno = new dyno.DynoUniform({
-        key: "deltaPS",
-        type: dyno.TPackedSplats,
-        value: deltaMesh.packedSplats,
-      });
+    function applyMorphModifier() {
+      if (!anchorMesh || !deltaMesh) return;
 
       anchorMesh.worldModifier = dyno.dynoBlock(
         { gsplat: dyno.Gsplat },
         { gsplat: dyno.Gsplat },
         ({ gsplat }) => {
           const { index, center } = dyno.splitGsplat(gsplat).outputs;
-          const deltaGsplat = dyno.readPackedSplat(deltaPSDyno, index);
-          const { center: deltaCenter } = dyno.splitGsplat(deltaGsplat).outputs;
-          const newCenter = dyno.add(center, dyno.mul(alphaDyno, deltaCenter));
-          return { gsplat: dyno.combineGsplat({ gsplat, center: newCenter }) };
+          const deltaGsplat = dyno.readPackedSplat(deltaMesh.packedSplats.dyno, index);
+          const { center: deltaCenter, scales: deltaScales, opacity: deltaOpacity } =
+            dyno.splitGsplat(deltaGsplat).outputs;
+          const newCenter = dyno.add(center, dyno.mul(positionAlphaDyno, deltaCenter));
+          const newScales = dyno.mul(scaleAlphaDyno, deltaScales);
+          const newOpacity = dyno.mul(opacityAlphaDyno, deltaOpacity);
+          return {
+            gsplat: dyno.combineGsplat({
+              gsplat,
+              center: newCenter,
+              scales: newScales,
+              opacity: newOpacity,
+            })
+          };
         }
       );
-      
+
       anchorMesh.updateGenerator();
+      anchorMesh.updateVersion();
       alphaController.enable();
-    };
+      scaleController.enable();
+      opacityController.enable();
+      hideInstructions();
+    }
+
+    async function setDeltaMesh(init) {
+      if (!anchorMesh) return;
+
+      deltaMesh = new SplatMesh(init);
+      await deltaMesh.initialized;
+
+      if (anchorMesh.numSplats !== deltaMesh.numSplats) {
+        alert(`Splat count mismatch! Anchor: ${anchorMesh.numSplats}, Delta: ${deltaMesh.numSplats}`);
+        deltaMesh = null;
+        return;
+      }
+
+      applyMorphModifier();
+    }
+
+    async function loadAnchorFromUrl(url) {
+      await setAnchorMesh({ url });
+    }
+
+    async function loadDeltaFromUrl(url) {
+      await setDeltaMesh({ url });
+    }
+
+    async function loadMorphPair(anchorUrl, deltaUrl) {
+      if (!anchorUrl || !deltaUrl) {
+        alert("Both anchor and delta paths are required.");
+        return;
+      }
+
+      try {
+        await loadAnchorFromUrl(anchorUrl);
+        await loadDeltaFromUrl(deltaUrl);
+        const url = new URL(window.location);
+        url.searchParams.set("anchor", anchorUrl);
+        url.searchParams.set("delta", deltaUrl);
+        history.replaceState(null, "", url);
+      } catch (err) {
+        console.error("Failed to load morph pair:", err);
+        alert("Failed to load the anchor/delta pair. Check the paths and console output.");
+      }
+    }
 
     renderer.setAnimationLoop((time) => {
       orbitControls.update();
