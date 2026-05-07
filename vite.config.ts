@@ -6,6 +6,75 @@ import { defineConfig } from "vite";
 import dts from "vite-plugin-dts";
 import glsl from "vite-plugin-glsl";
 
+type MorphCandidate = {
+  anchorPath: string;
+  deltaPath: string;
+  fileName: string;
+  label: string;
+  modelName: string;
+  step: string;
+  vizDir: string;
+};
+
+function listSam3dgsMorphCandidates(fsRoot: string): MorphCandidate[] {
+  const exprRoot = path.join(fsRoot, "expr");
+  if (!fs.existsSync(exprRoot) || !fs.statSync(exprRoot).isDirectory()) {
+    return [];
+  }
+
+  const candidates: MorphCandidate[] = [];
+
+  function walk(currentDir: string) {
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const absPath = path.join(currentDir, entry.name);
+      if (entry.name === "deprecated") {
+        continue;
+      }
+      if (entry.isDirectory()) {
+        const vizEntries = fs.readdirSync(absPath, { withFileTypes: true });
+        for (const vizEntry of vizEntries) {
+          if (!vizEntry.isFile() || !vizEntry.name.endsWith("_canonical_rotation.ply")) {
+            continue;
+          }
+
+          const step = vizEntry.name.slice(0, -"_canonical_rotation.ply".length);
+          const deltaName = `${step}_offset_delta.ply`;
+          const deltaAbsPath = path.join(absPath, deltaName);
+          if (!fs.existsSync(deltaAbsPath) || !fs.statSync(deltaAbsPath).isFile()) {
+            continue;
+          }
+
+          const relVizDir = path.relative(fsRoot, absPath).split(path.sep).join("/");
+          const relAnchorPath = path.join(relVizDir, vizEntry.name).split(path.sep).join("/");
+          const relDeltaPath = path.join(relVizDir, deltaName).split(path.sep).join("/");
+          const modelDir = path.basename(path.dirname(relAnchorPath));
+          candidates.push({
+            anchorPath: relAnchorPath,
+            deltaPath: relDeltaPath,
+            fileName: vizEntry.name,
+            label: `${modelDir || "."} :: ${step}`,
+            modelName: modelDir || ".",
+            step,
+            vizDir: relVizDir,
+          });
+        }
+
+        walk(absPath);
+      }
+    }
+  }
+
+  walk(exprRoot);
+  candidates.sort((a, b) => {
+    if (a.modelName !== b.modelName) {
+      return a.modelName.localeCompare(b.modelName);
+    }
+    return b.step.localeCompare(a.step);
+  });
+  return candidates;
+}
+
 /**
  * Vite plugin to fix WASM data URL compatibility with webpack/Next.js.
  *
@@ -116,10 +185,17 @@ export default defineConfig(({ mode }) => {
         name: "serve-local-files",
         configureServer(server) {
           const urlPrefix = "/local/";
-          const fsRoot = "/home/jianjinx/data2/SAM3DGS/";
+          const morphCandidatesUrl = "/sam3dgs/morph-candidates";
+          const fsRoot = path.resolve(__dirname, "..", "..");
 
           server.middlewares.use((req, res, next) => {
             const url = req.url?.split("?")[0] ?? "";
+            if (url === morphCandidatesUrl) {
+              const candidates = listSam3dgsMorphCandidates(fsRoot);
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ candidates }));
+              return;
+            }
             if (!url.startsWith(urlPrefix)) return next();
 
             const relPath = url.slice(urlPrefix.length);
@@ -155,6 +231,7 @@ export default defineConfig(({ mode }) => {
           });
 
           console.log(`📁 Local files active: ${urlPrefix} → ${fsRoot}`);
+          console.log(`🧭 Morph candidates active: ${morphCandidatesUrl}`);
         },
       },
     ],
