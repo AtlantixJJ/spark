@@ -186,7 +186,17 @@
   <script type="module">
     import * as THREE from "three";
     import { SplatMesh, transcodeSpz, SparkControls } from "@sparkjsdev/spark";
-    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    const PLY_TYPE_BYTES = {
+      char: 1,
+      uchar: 1,
+      short: 2,
+      ushort: 2,
+      int: 4,
+      uint: 4,
+      float: 4,
+      double: 8,
+    };
 
     const sparkCanvasEl = document.querySelector(".spark-canvas");
     const scene = new THREE.Scene();
@@ -199,7 +209,6 @@
     var fileBytes;
     renderer.setSize(width, height, false);
 
-    debugger;
     const controls = new SparkControls({ canvas: sparkCanvasEl });
     // const orbitControls = new OrbitControls(camera, renderer.domElement);
     // orbitControls.target.set(0, 0, 0);
@@ -267,8 +276,162 @@
       loadSplatFile(event.target.files[0]);
     };
 
+    function parsePlyHeader(fileBytes) {
+      const headerProbe = new TextDecoder().decode(fileBytes.slice(0, 65536));
+      let endMarker = "end_header\n";
+      let endIndex = headerProbe.indexOf(endMarker);
+      if (endIndex < 0) {
+        endMarker = "end_header\r\n";
+        endIndex = headerProbe.indexOf(endMarker);
+      }
+      if (endIndex < 0) {
+        return null;
+      }
+
+      const headerText = headerProbe.slice(0, endIndex + endMarker.length);
+      const headerLines = headerText.trim().split(/\r?\n/);
+      const headerByteLength = new TextEncoder().encode(headerText).length;
+
+      let format = null;
+      let currentElement = null;
+      const comments = [];
+      const elements = [];
+      for (const line of headerLines) {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          continue;
+        }
+        const fields = trimmed.split(/\s+/);
+        if (fields[0] === "format") {
+          format = fields[1];
+          continue;
+        }
+        if (fields[0] === "comment") {
+          comments.push(trimmed.slice("comment ".length));
+          continue;
+        }
+        if (fields[0] === "element") {
+          currentElement = {
+            name: fields[1],
+            count: Number.parseInt(fields[2], 10),
+            properties: [],
+          };
+          elements.push(currentElement);
+          continue;
+        }
+        if (fields[0] === "property" && currentElement) {
+          if (fields[1] === "list") {
+            currentElement.properties.push({
+              name: fields[4],
+              isList: true,
+              countType: fields[2],
+              type: fields[3],
+            });
+          } else {
+            currentElement.properties.push({
+              name: fields[2],
+              isList: false,
+              type: fields[1],
+            });
+          }
+        }
+      }
+
+      return { comments, elements, format, headerByteLength };
+    }
+
+    function reorderSam3dgsSparkPly(fileBytes, fileNameHint) {
+      const header = parsePlyHeader(fileBytes);
+      if (!header || header.format !== "binary_little_endian") {
+        return fileBytes;
+      }
+
+      const vertexElement = header.elements.find((element) => element.name === "vertex");
+      if (!vertexElement) {
+        return fileBytes;
+      }
+
+      const hasSam3dgsComment = header.comments.includes("sam3dgs_rotation_order xyzw");
+      const looksLikeSam3dgsSparkFile = fileNameHint != null && /(?:^|[_-])spark\.ply$/i.test(fileNameHint);
+      if (!hasSam3dgsComment && !looksLikeSam3dgsSparkFile) {
+        return fileBytes;
+      }
+
+      let vertexStride = 0;
+      const propertyOffsets = {};
+      for (const property of vertexElement.properties) {
+        if (property.isList) {
+          return fileBytes;
+        }
+        const typeBytes = PLY_TYPE_BYTES[property.type];
+        if (typeBytes == null) {
+          return fileBytes;
+        }
+        propertyOffsets[property.name] = { offset: vertexStride, type: property.type };
+        vertexStride += typeBytes;
+      }
+
+      const rotProps = ["rot_0", "rot_1", "rot_2", "rot_3"].map((name) => propertyOffsets[name]);
+      if (rotProps.some((prop) => prop == null || prop.type !== "float")) {
+        return fileBytes;
+      }
+
+      const normalizedBytes = fileBytes.slice();
+      const dataView = new DataView(
+        normalizedBytes.buffer,
+        normalizedBytes.byteOffset + header.headerByteLength,
+        normalizedBytes.byteLength - header.headerByteLength,
+      );
+      for (let index = 0; index < vertexElement.count; index++) {
+        const baseOffset = index * vertexStride;
+        const quatX = dataView.getFloat32(baseOffset + rotProps[0].offset, true);
+        const quatY = dataView.getFloat32(baseOffset + rotProps[1].offset, true);
+        const quatZ = dataView.getFloat32(baseOffset + rotProps[2].offset, true);
+        const quatW = dataView.getFloat32(baseOffset + rotProps[3].offset, true);
+        dataView.setFloat32(baseOffset + rotProps[0].offset, quatW, true);
+        dataView.setFloat32(baseOffset + rotProps[1].offset, quatX, true);
+        dataView.setFloat32(baseOffset + rotProps[2].offset, quatY, true);
+        dataView.setFloat32(baseOffset + rotProps[3].offset, quatZ, true);
+      }
+      return normalizedBytes;
+    }
+
+    async function readAndNormalizeSplatFile(splatFile) {
+      const rawFileBytes = new Uint8Array(await splatFile.arrayBuffer());
+      return reorderSam3dgsSparkPly(rawFileBytes, splatFile.name);
+    }
+
+    function resolveSplatUrl(rawPath) {
+      if (!rawPath) {
+        return rawPath;
+      }
+      if (
+        rawPath.startsWith("http://") ||
+        rawPath.startsWith("https://") ||
+        rawPath.startsWith("/local/") ||
+        rawPath.startsWith("/")
+      ) {
+        return rawPath;
+      }
+      return `/local/${rawPath.replace(/^\.?\//, "")}`;
+    }
+
+    function frameLoadedSplat(mesh) {
+      const bounds = mesh.getBoundingBox(false);
+      const center = bounds.getCenter(new THREE.Vector3());
+      const size = bounds.getSize(new THREE.Vector3());
+      const radius = Math.max(size.length() * 0.5, 0.25);
+      const distance = radius / Math.tan((camera.fov * Math.PI / 180) * 0.5) * 1.1;
+
+      camera.position.copy(center).add(new THREE.Vector3(0, 0, distance));
+      camera.lookAt(center);
+      camera.near = Math.max(distance / 100, 0.01);
+      camera.far = Math.max(distance * 20, 100);
+      camera.updateProjectionMatrix();
+    }
+
     async function loadSplatFile(splatFile) {
-      fileBytes = new Uint8Array(await splatFile.arrayBuffer());
+      fileBytes = await readAndNormalizeSplatFile(splatFile);
       fileName = splatFile.name;
       setSplatFile({ fileBytes: fileBytes.slice(), fileName });
     }
@@ -277,8 +440,11 @@
     function setSplatFile(init) {
       if (loadedSplat) { scene.remove(loadedSplat); }
 
-      loadedSplat = new SplatMesh(init);
-      loadedSplat.quaternion.set(1, 0, 0, 0);
+      loadedSplat = new SplatMesh({
+        ...init,
+        onLoad: frameLoadedSplat,
+      });
+      loadedSplat.quaternion.set(0, 0, 0, 1);
       scene.add(loadedSplat);
 
       document.querySelector('.container').classList.add('hidden');
@@ -291,11 +457,21 @@
     if (splatURL) { loadSplatURL(splatURL); }
 
 
-    function loadSplatURL(splatURL) {
-      fileName = splatURL.split("/").pop().split("?")[0];
+    async function loadSplatURL(splatURL) {
+      const resolvedUrl = resolveSplatUrl(splatURL);
+      fileName = resolvedUrl.split("/").pop().split("?")[0];
       document.querySelector('.container').classList.add('hidden');
       document.querySelector('.canvas-container').classList.remove('invisible');
-      setSplatFile({ url: splatURL });
+      if (fileName.toLowerCase().endsWith(".ply")) {
+        const response = await fetch(resolvedUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch ${resolvedUrl}: ${response.status} ${response.statusText}`);
+        }
+        fileBytes = reorderSam3dgsSparkPly(new Uint8Array(await response.arrayBuffer()), fileName);
+        setSplatFile({ fileBytes: fileBytes.slice(), fileName });
+        return;
+      }
+      setSplatFile({ url: resolvedUrl });
     }
 
     const urlFormEl = document.querySelector('.url-form');
@@ -341,7 +517,6 @@
       </span>
       <span class="label">.spz</span>
     </button>
-</button>
     <canvas class="spark-canvas"></canvas>
   </div>
   <div class="container">
@@ -353,7 +528,7 @@
       <label for="file-input" class="button upload"><img class="upload-icon" src="upload-icon.svg" alt="upload" />Choose file</label>
       <input id="file-input" class="hidden" accept=".ply,.spz,.splat,.ksplat,.zip" type="file" />
       <form class="url-form">
-        <input class="url-input" type="text" placeholder="URL or local path (e.g. /local/expr/UV-CC-HR-RoPE/viz/scene.spz)" />
+        <input class="url-input" type="text" placeholder="URL or repo path (e.g. expr/infer_lhmpp/avatar_lhm_canonical_spark.ply)" />
       </form>
     </div>
   </div>

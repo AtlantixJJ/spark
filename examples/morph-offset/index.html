@@ -36,16 +36,55 @@
       padding: 20px;
       border-radius: 10px;
     }
+    #candidate-bar {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.72);
+      backdrop-filter: blur(6px);
+    }
+    #candidate-select,
+    #candidate-refresh,
+    #candidate-load {
+      background: #161616;
+      color: #fff;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font: inherit;
+    }
+    #candidate-select {
+      min-width: 320px;
+    }
+    #candidate-status {
+      color: #bbb;
+      font-size: 12px;
+      min-width: 120px;
+    }
   </style>
 </head>
 
 <body>
   <canvas id="canvas" tabindex="0"></canvas>
+  <div id="candidate-bar">
+    <select id="candidate-select">
+      <option value="">Select expr candidate</option>
+    </select>
+    <button id="candidate-refresh" type="button">Refresh Candidates</button>
+    <button id="candidate-load" type="button">Load Selected</button>
+    <span id="candidate-status"></span>
+  </div>
   <div id="gui-container"></div>
   <div id="instructions">
     <h1>Offset Morph Viewer</h1>
-    <p>1. Edit anchor and delta paths in the panel</p>
-    <p>2. Click Load Morph Pair</p>
+    <p>1. Refresh and pick a candidate, or edit paths manually</p>
+    <p>2. Click Load Selected or Load Morph Pair</p>
     <p>3. Use the morph sliders</p>
   </div>
 
@@ -66,8 +105,9 @@
     import { GUI } from "lil-gui";
     import { SparkRenderer, SplatMesh, dyno } from "@sparkjsdev/spark";
 
-    const DEFAULT_ANCHOR_URL = "/local/expr/UV-CC-HR-RoPE/viz/PT_10524_canonical_rotation.ply";
-    const DEFAULT_DELTA_URL = "/local/expr/UV-CC-HR-RoPE/viz/PT_10524_offset_delta.ply";
+    const MORPH_CANDIDATES_URL = "/sam3dgs/morph-candidates";
+    const DEFAULT_ANCHOR_URL = "/local/expr/infer_lhmpp/avatar_lhm_canonical_spark.ply";
+    const DEFAULT_DELTA_URL = "/local/expr/infer_lhmpp/avatar_lhm_delta_spark.ply";
     const urlParams = new URLSearchParams(window.location.search);
 
     const scene = new THREE.Scene();
@@ -76,6 +116,10 @@
     camera.position.set(0, 0, 2);
 
     const canvas = document.getElementById("canvas");
+    const candidateSelect = document.getElementById("candidate-select");
+    const candidateRefreshButton = document.getElementById("candidate-refresh");
+    const candidateLoadButton = document.getElementById("candidate-load");
+    const candidateStatus = document.getElementById("candidate-status");
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     const spark = new SparkRenderer({ renderer });
     scene.add(spark);
@@ -94,6 +138,7 @@
     orbitControls.enableDamping = true;
 
     const gui = new GUI({ container: document.getElementById("gui-container") });
+    let morphCandidates = [];
     const settings = {
       anchorPath: urlParams.get("anchor") || DEFAULT_ANCHOR_URL,
       deltaPath: urlParams.get("delta") || DEFAULT_DELTA_URL,
@@ -127,6 +172,90 @@
     gui.add(settings, "autoRotate").name("Auto Rotate");
     gui.addColor(settings, "backgroundColor").name("Background").onChange(v => scene.background.set(v));
     gui.add(settings, "resetCamera").name("Reset Camera");
+
+    function setCandidateStatus(message) {
+      candidateStatus.textContent = message;
+    }
+
+    function resolveLocalPath(pathValue) {
+      if (!pathValue) {
+        return pathValue;
+      }
+      if (
+        pathValue.startsWith("/local/") ||
+        pathValue.startsWith("http://") ||
+        pathValue.startsWith("https://") ||
+        pathValue.startsWith("/")
+      ) {
+        return pathValue;
+      }
+      return `/local/${pathValue.replace(/^\.?\//, "")}`;
+    }
+
+    function updateGuiControllers() {
+      for (const controller of gui.controllers) {
+        controller.updateDisplay();
+      }
+    }
+
+    function syncCandidateSelection() {
+      const matchedCandidate = morphCandidates.find((candidate) => {
+        return (
+          resolveLocalPath(candidate.anchorPath) === settings.anchorPath &&
+          resolveLocalPath(candidate.deltaPath) === settings.deltaPath
+        );
+      });
+      candidateSelect.value = matchedCandidate ? matchedCandidate.anchorPath : "";
+    }
+
+    function applyCandidate(candidate) {
+      settings.anchorPath = resolveLocalPath(candidate.anchorPath);
+      settings.deltaPath = resolveLocalPath(candidate.deltaPath);
+      updateGuiControllers();
+      syncCandidateSelection();
+    }
+
+    function populateCandidateSelect(candidates) {
+      morphCandidates = candidates;
+      const currentValue = candidateSelect.value;
+      candidateSelect.innerHTML = "";
+
+      const placeholderOption = document.createElement("option");
+      placeholderOption.value = "";
+      placeholderOption.textContent = candidates.length > 0 ? "Select expr candidate" : "No candidates found";
+      candidateSelect.appendChild(placeholderOption);
+
+      for (const candidate of candidates) {
+        const option = document.createElement("option");
+        option.value = candidate.anchorPath;
+        option.textContent = candidate.label;
+        candidateSelect.appendChild(option);
+      }
+
+      if (candidates.some((candidate) => candidate.anchorPath === currentValue)) {
+        candidateSelect.value = currentValue;
+      } else {
+        syncCandidateSelection();
+      }
+    }
+
+    async function refreshMorphCandidates() {
+      setCandidateStatus("Scanning...");
+      try {
+        const response = await fetch(MORPH_CANDIDATES_URL, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`Failed to fetch candidates: ${response.status} ${response.statusText}`);
+        }
+        const payload = await response.json();
+        const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
+        populateCandidateSelect(candidates);
+        setCandidateStatus(`${candidates.length} candidate${candidates.length === 1 ? "" : "s"}`);
+      } catch (err) {
+        console.error("Failed to refresh morph candidates:", err);
+        populateCandidateSelect([]);
+        setCandidateStatus("Scan failed");
+      }
+    }
 
     let anchorMesh = null;
     let deltaMesh = null;
@@ -234,11 +363,11 @@
     }
 
     async function loadAnchorFromUrl(url) {
-      await setAnchorMesh({ url });
+      await setAnchorMesh({ url: resolveLocalPath(url) });
     }
 
     async function loadDeltaFromUrl(url) {
-      await setDeltaMesh({ url });
+      await setDeltaMesh({ url: resolveLocalPath(url) });
     }
 
     async function loadMorphPair(anchorUrl, deltaUrl) {
@@ -259,6 +388,29 @@
         alert("Failed to load the anchor/delta pair. Check the paths and console output.");
       }
     }
+
+    candidateRefreshButton.addEventListener("click", async () => {
+      await refreshMorphCandidates();
+    });
+
+    candidateSelect.addEventListener("change", () => {
+      const candidate = morphCandidates.find((item) => item.anchorPath === candidateSelect.value);
+      if (!candidate) {
+        return;
+      }
+      applyCandidate(candidate);
+    });
+
+    candidateLoadButton.addEventListener("click", async () => {
+      const candidate = morphCandidates.find((item) => item.anchorPath === candidateSelect.value);
+      if (candidate) {
+        applyCandidate(candidate);
+      }
+      await loadMorphPair(settings.anchorPath, settings.deltaPath);
+    });
+
+    await refreshMorphCandidates();
+    syncCandidateSelection();
 
     renderer.setAnimationLoop((time) => {
       orbitControls.update();
