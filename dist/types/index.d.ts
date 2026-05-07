@@ -18,7 +18,7 @@ export * as modifiers from './modifiers';
 export { VRButton } from './vrButton';
 export { type JointId, JointEnum, JOINT_IDS, NUM_JOINTS, JOINT_INDEX, JOINT_RADIUS, JOINT_SEGMENTS, JOINT_SEGMENT_STEPS, JOINT_TIPS, FINGER_TIPS, Hand, HANDS, type Joint, type HandJoints, type HandsJoints, XrHands, HandMovement, } from './hands';
 export { SparkControls, FpsMovement, PointerControls } from './controls';
-export { isMobile, isAndroid, isOculus, flipPixels, pixelsToPngUrl, toHalf, fromHalf, floatToUint8, floatToSint8, Uint8ToFloat, Sint8ToFloat, setPackedSplat, unpackSplat, } from './utils';
+export { isMobile, isAndroid, isOculus, flipPixels, pixelsToPngUrl, toHalf, fromHalf, floatToUint8, floatToSint8, Uint8ToFloat, Sint8ToFloat, setPackedSplat, setPackedSplatCenter, setPackedSplatOpacity, setPackedSplatScales, unpackSplat, } from './utils';
 export * as utils from './utils';
 export { LN_SCALE_MIN, LN_SCALE_MAX } from './defines';
 export * as defines from './defines';

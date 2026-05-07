@@ -103,11 +103,18 @@
     import * as THREE from "three";
     import { OrbitControls } from "three/addons/controls/OrbitControls.js";
     import { GUI } from "lil-gui";
-    import { SparkRenderer, SplatMesh, dyno } from "@sparkjsdev/spark";
+    import {
+      SparkRenderer,
+      SplatMesh,
+      setPackedSplatCenter,
+      setPackedSplatOpacity,
+      setPackedSplatScales,
+      unpackSplat,
+    } from "@sparkjsdev/spark";
 
     const MORPH_CANDIDATES_URL = "/sam3dgs/morph-candidates";
-    const DEFAULT_ANCHOR_URL = "/local/expr/infer_lhmpp/avatar_lhm_canonical_spark.ply";
-    const DEFAULT_DELTA_URL = "/local/expr/infer_lhmpp/avatar_lhm_delta_spark.ply";
+    const DEFAULT_ANCHOR_URL = "";
+    const DEFAULT_DELTA_URL = "";
     const urlParams = new URLSearchParams(window.location.search);
 
     const scene = new THREE.Scene();
@@ -136,6 +143,50 @@
 
     const orbitControls = new OrbitControls(camera, renderer.domElement);
     orbitControls.enableDamping = true;
+    orbitControls.target.set(0, 0, 0);
+    orbitControls.update();
+
+    const pressedKeys = new Set();
+    const panRight = new THREE.Vector3();
+    const panUp = new THREE.Vector3();
+    const panDelta = new THREE.Vector3();
+    const cameraDirection = new THREE.Vector3();
+    let lastFrameTime = performance.now();
+
+    document.addEventListener("keydown", (event) => {
+      pressedKeys.add(event.code);
+    });
+    document.addEventListener("keyup", (event) => {
+      pressedKeys.delete(event.code);
+    });
+    window.addEventListener("blur", () => {
+      pressedKeys.clear();
+    });
+
+    function updateKeyboardPan(deltaTime) {
+      let x = 0;
+      let y = 0;
+      if (pressedKeys.has("KeyA")) x -= 1;
+      if (pressedKeys.has("KeyD")) x += 1;
+      if (pressedKeys.has("KeyW")) y += 1;
+      if (pressedKeys.has("KeyS")) y -= 1;
+      if (x === 0 && y === 0) {
+        return;
+      }
+
+      camera.getWorldDirection(cameraDirection);
+      panRight.crossVectors(cameraDirection, camera.up).normalize();
+      panUp.copy(camera.up).normalize();
+
+      const distance = camera.position.distanceTo(orbitControls.target);
+      const panSpeed = Math.max(distance, 0.25) * 1.5 * deltaTime;
+      panDelta.set(0, 0, 0);
+      panDelta.addScaledVector(panRight, x * panSpeed);
+      panDelta.addScaledVector(panUp, y * panSpeed);
+
+      camera.position.add(panDelta);
+      orbitControls.target.add(panDelta);
+    }
 
     const gui = new GUI({ container: document.getElementById("gui-container") });
     let morphCandidates = [];
@@ -143,8 +194,8 @@
       anchorPath: urlParams.get("anchor") || DEFAULT_ANCHOR_URL,
       deltaPath: urlParams.get("delta") || DEFAULT_DELTA_URL,
       alpha: 0,
-      scaleAlpha: 1,
-      opacityAlpha: 1,
+      scaleMultiplier: 1,
+      opacityMultiplier: 1,
       autoRotate: false,
       backgroundColor: "#000000",
       loadMorphPair: async () => {
@@ -161,14 +212,8 @@
     gui.add(settings, "deltaPath").name("Delta Path");
     gui.add(settings, "loadMorphPair").name("Load Morph Pair");
     const alphaController = gui.add(settings, "alpha", 0, 1, 0.01).name("Position Morph").disable();
-    const scaleController = gui
-      .add(settings, "scaleAlpha", 0, 1, 0.01)
-      .name("Scale Morph")
-      .disable();
-    const opacityController = gui
-      .add(settings, "opacityAlpha", 0, 1, 0.01)
-      .name("Opacity Morph")
-      .disable();
+    const scaleController = gui.add(settings, "scaleMultiplier", 0, 1, 0.01).name("Scale").disable();
+    const opacityController = gui.add(settings, "opacityMultiplier", 0, 1, 0.01).name("Opacity").disable();
     gui.add(settings, "autoRotate").name("Auto Rotate");
     gui.addColor(settings, "backgroundColor").name("Background").onChange(v => scene.background.set(v));
     gui.add(settings, "resetCamera").name("Reset Camera");
@@ -258,33 +303,33 @@
     }
 
     let anchorMesh = null;
-    let deltaMesh = null;
-    const positionAlphaDyno = dyno.dynoFloat(settings.alpha);
-    const scaleAlphaDyno = dyno.dynoFloat(settings.scaleAlpha);
-    const opacityAlphaDyno = dyno.dynoFloat(settings.opacityAlpha);
+    let deltaOffsets = null;
+    let anchorOriginalCenters = null;
+    let anchorOriginalScales = null;
+    let anchorOriginalOpacities = null;
 
-    alphaController.onChange(v => {
-      positionAlphaDyno.value = v;
-      if (anchorMesh && deltaMesh) anchorMesh.updateVersion();
+    alphaController.onChange(() => {
+      if (anchorMesh && deltaOffsets && anchorOriginalCenters && anchorOriginalScales && anchorOriginalOpacities) {
+        applyVisualizationState();
+      }
     });
 
-    scaleController.onChange(v => {
-      scaleAlphaDyno.value = v;
-      if (anchorMesh && deltaMesh) anchorMesh.updateVersion();
+    scaleController.onChange(() => {
+      if (anchorMesh && deltaOffsets && anchorOriginalCenters && anchorOriginalScales && anchorOriginalOpacities) {
+        applyVisualizationState();
+      }
     });
 
-    opacityController.onChange(v => {
-      opacityAlphaDyno.value = v;
-      if (anchorMesh && deltaMesh) anchorMesh.updateVersion();
+    opacityController.onChange(() => {
+      if (anchorMesh && deltaOffsets && anchorOriginalCenters && anchorOriginalScales && anchorOriginalOpacities) {
+        applyVisualizationState();
+      }
     });
 
     function resetMorphControls() {
       settings.alpha = 0;
-      settings.scaleAlpha = 1;
-      settings.opacityAlpha = 1;
-      positionAlphaDyno.value = settings.alpha;
-      scaleAlphaDyno.value = settings.scaleAlpha;
-      opacityAlphaDyno.value = settings.opacityAlpha;
+      settings.scaleMultiplier = 1;
+      settings.opacityMultiplier = 1;
       alphaController.updateDisplay();
       scaleController.updateDisplay();
       opacityController.updateDisplay();
@@ -298,7 +343,10 @@
         scene.remove(anchorMesh);
         anchorMesh = null;
       }
-      deltaMesh = null;
+      deltaOffsets = null;
+      anchorOriginalCenters = null;
+      anchorOriginalScales = null;
+      anchorOriginalOpacities = null;
       resetMorphControls();
     }
 
@@ -311,35 +359,72 @@
       anchorMesh = new SplatMesh(init);
       await anchorMesh.initialized;
       scene.add(anchorMesh);
+      anchorOriginalCenters = extractCenters(anchorMesh);
+      const { scales, opacities } = extractScalesAndOpacities(anchorMesh);
+      anchorOriginalScales = scales;
+      anchorOriginalOpacities = opacities;
       hideInstructions();
     }
 
-    function applyMorphModifier() {
-      if (!anchorMesh || !deltaMesh) return;
+    function extractCenters(splatMesh) {
+      const packed = splatMesh.packedSplats.packedArray;
+      const numSplats = splatMesh.packedSplats.numSplats;
+      const centers = new Float32Array(numSplats * 3);
+      for (let i = 0; i < numSplats; i++) {
+        const unpacked = unpackSplat(packed, i, splatMesh.packedSplats.splatEncoding);
+        centers[i * 3 + 0] = unpacked.center.x;
+        centers[i * 3 + 1] = unpacked.center.y;
+        centers[i * 3 + 2] = unpacked.center.z;
+      }
+      return centers;
+    }
 
-      anchorMesh.worldModifier = dyno.dynoBlock(
-        { gsplat: dyno.Gsplat },
-        { gsplat: dyno.Gsplat },
-        ({ gsplat }) => {
-          const { index, center } = dyno.splitGsplat(gsplat).outputs;
-          const deltaGsplat = dyno.readPackedSplat(deltaMesh.packedSplats.dyno, index);
-          const { center: deltaCenter, scales: deltaScales, opacity: deltaOpacity } =
-            dyno.splitGsplat(deltaGsplat).outputs;
-          const newCenter = dyno.add(center, dyno.mul(positionAlphaDyno, deltaCenter));
-          const newScales = dyno.mul(scaleAlphaDyno, deltaScales);
-          const newOpacity = dyno.mul(opacityAlphaDyno, deltaOpacity);
-          return {
-            gsplat: dyno.combineGsplat({
-              gsplat,
-              center: newCenter,
-              scales: newScales,
-              opacity: newOpacity,
-            })
-          };
-        }
-      );
+    function extractScalesAndOpacities(splatMesh) {
+      const packed = splatMesh.packedSplats.packedArray;
+      const numSplats = splatMesh.packedSplats.numSplats;
+      const scales = new Float32Array(numSplats * 3);
+      const opacities = new Float32Array(numSplats);
+      for (let i = 0; i < numSplats; i++) {
+        const unpacked = unpackSplat(packed, i, splatMesh.packedSplats.splatEncoding);
+        scales[i * 3 + 0] = unpacked.scales.x;
+        scales[i * 3 + 1] = unpacked.scales.y;
+        scales[i * 3 + 2] = unpacked.scales.z;
+        opacities[i] = unpacked.opacity;
+      }
+      return { scales, opacities };
+    }
 
-      anchorMesh.updateGenerator();
+    function applyVisualizationState() {
+      if (!anchorMesh || !deltaOffsets || !anchorOriginalCenters || !anchorOriginalScales || !anchorOriginalOpacities) return;
+      const packed = anchorMesh.packedSplats.packedArray;
+      const numSplats = anchorMesh.packedSplats.numSplats;
+      const alpha = settings.alpha;
+      const scaleMultiplier = settings.scaleMultiplier;
+      const opacityMultiplier = settings.opacityMultiplier;
+      for (let i = 0; i < numSplats; i++) {
+        const baseOffset = i * 3;
+        setPackedSplatCenter(
+          packed,
+          i,
+          anchorOriginalCenters[baseOffset + 0] + alpha * deltaOffsets[baseOffset + 0],
+          anchorOriginalCenters[baseOffset + 1] + alpha * deltaOffsets[baseOffset + 1],
+          anchorOriginalCenters[baseOffset + 2] + alpha * deltaOffsets[baseOffset + 2],
+        );
+        setPackedSplatScales(
+          packed,
+          i,
+          anchorOriginalScales[baseOffset + 0] * scaleMultiplier,
+          anchorOriginalScales[baseOffset + 1] * scaleMultiplier,
+          anchorOriginalScales[baseOffset + 2] * scaleMultiplier,
+          anchorMesh.packedSplats.splatEncoding,
+        );
+        setPackedSplatOpacity(
+          packed,
+          i,
+          anchorOriginalOpacities[i] * opacityMultiplier,
+        );
+      }
+      anchorMesh.packedSplats.needsUpdate = true;
       anchorMesh.updateVersion();
       alphaController.enable();
       scaleController.enable();
@@ -347,19 +432,60 @@
       hideInstructions();
     }
 
-    async function setDeltaMesh(init) {
-      if (!anchorMesh) return;
-
-      deltaMesh = new SplatMesh(init);
-      await deltaMesh.initialized;
-
-      if (anchorMesh.numSplats !== deltaMesh.numSplats) {
-        alert(`Splat count mismatch! Anchor: ${anchorMesh.numSplats}, Delta: ${deltaMesh.numSplats}`);
-        deltaMesh = null;
+    function logDeltaStats(url, offsets) {
+      if (!offsets || offsets.length === 0) {
+        console.log("[morph-offset] Loaded empty delta file:", url);
         return;
       }
 
-      applyMorphModifier();
+      const sampleCount = offsets.length / 3;
+      let absMax = 0;
+      let magMax = 0;
+      let magSum = 0;
+      let nonZeroCount = 0;
+
+      for (let i = 0; i < offsets.length; i += 3) {
+        const x = offsets[i + 0];
+        const y = offsets[i + 1];
+        const z = offsets[i + 2];
+        absMax = Math.max(absMax, Math.abs(x), Math.abs(y), Math.abs(z));
+        const mag = Math.hypot(x, y, z);
+        magMax = Math.max(magMax, mag);
+        magSum += mag;
+        if (mag > 1e-8) {
+          nonZeroCount += 1;
+        }
+      }
+
+      console.log("[morph-offset] Loaded delta file", {
+        url,
+        sampleCount,
+        absMax,
+        magMean: magSum / sampleCount,
+        magMax,
+        nonZeroCount,
+        firstOffsets: Array.from(offsets.slice(0, 12)),
+      });
+    }
+
+    async function setDeltaOffsets(url) {
+      if (!anchorMesh) return;
+      const resolvedUrl = resolveLocalPath(url);
+      const response = await fetch(resolvedUrl, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch delta offsets: ${response.status} ${response.statusText}`);
+      }
+      const buffer = await response.arrayBuffer();
+      if (buffer.byteLength % (3 * 4) !== 0) {
+        throw new Error(`Invalid delta offset buffer size: ${buffer.byteLength}`);
+      }
+      deltaOffsets = new Float32Array(buffer);
+      const expectedCount = anchorMesh.packedSplats.numSplats * 3;
+      if (deltaOffsets.length !== expectedCount) {
+        throw new Error(`Offset count mismatch! Anchor: ${anchorMesh.packedSplats.numSplats}, Delta entries: ${deltaOffsets.length / 3}`);
+      }
+      logDeltaStats(resolvedUrl, deltaOffsets);
+      applyVisualizationState();
     }
 
     async function loadAnchorFromUrl(url) {
@@ -367,7 +493,7 @@
     }
 
     async function loadDeltaFromUrl(url) {
-      await setDeltaMesh({ url: resolveLocalPath(url) });
+      await setDeltaOffsets(url);
     }
 
     async function loadMorphPair(anchorUrl, deltaUrl) {
@@ -413,6 +539,9 @@
     syncCandidateSelection();
 
     renderer.setAnimationLoop((time) => {
+      const deltaTime = (time - lastFrameTime) / 1000;
+      lastFrameTime = time;
+      updateKeyboardPan(deltaTime);
       orbitControls.update();
       if (settings.autoRotate && anchorMesh) {
         anchorMesh.rotation.y += 0.01;

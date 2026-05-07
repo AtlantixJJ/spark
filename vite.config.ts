@@ -13,6 +13,7 @@ type MorphCandidate = {
   label: string;
   modelName: string;
   step: string;
+  variant: string;
   vizDir: string;
 };
 
@@ -23,8 +24,66 @@ function listSam3dgsMorphCandidates(fsRoot: string): MorphCandidate[] {
   }
 
   const candidates: MorphCandidate[] = [];
+  const seen = new Set<string>();
+  const pairSpecs = [
+    {
+      anchorSuffix: "_canonical.ply",
+      deltaSuffix: "_canonical_delta.bin",
+      variant: "canonical",
+    },
+    {
+      anchorSuffix: "_posed.ply",
+      deltaSuffix: "_posed_delta.bin",
+      variant: "posed",
+    },
+  ];
+
+  function scanDirectoryForPairs(targetDir: string) {
+    const entries = fs.readdirSync(targetDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      const pairSpec = pairSpecs.find(({ anchorSuffix }) =>
+        entry.name.endsWith(anchorSuffix),
+      );
+      if (!pairSpec) {
+        continue;
+      }
+
+      const step = entry.name.slice(0, -pairSpec.anchorSuffix.length);
+      const deltaName = `${step}${pairSpec.deltaSuffix}`;
+      const deltaAbsPath = path.join(targetDir, deltaName);
+      if (!fs.existsSync(deltaAbsPath) || !fs.statSync(deltaAbsPath).isFile()) {
+        continue;
+      }
+
+      const relDir = path.relative(fsRoot, targetDir).split(path.sep).join("/");
+      const relAnchorPath = path.join(relDir, entry.name).split(path.sep).join("/");
+      const relDeltaPath = path.join(relDir, deltaName).split(path.sep).join("/");
+      const candidateKey = `${relAnchorPath}::${relDeltaPath}`;
+      if (seen.has(candidateKey)) {
+        continue;
+      }
+      seen.add(candidateKey);
+
+      const modelDir = path.basename(path.dirname(relAnchorPath));
+      candidates.push({
+        anchorPath: relAnchorPath,
+        deltaPath: relDeltaPath,
+        fileName: entry.name,
+        label: `${modelDir || "."} :: ${step} :: ${pairSpec.variant}`,
+        modelName: modelDir || ".",
+        step,
+        variant: pairSpec.variant,
+        vizDir: relDir,
+      });
+    }
+  }
 
   function walk(currentDir: string) {
+    scanDirectoryForPairs(currentDir);
     const entries = fs.readdirSync(currentDir, { withFileTypes: true });
     for (const entry of entries) {
       const absPath = path.join(currentDir, entry.name);
@@ -32,34 +91,6 @@ function listSam3dgsMorphCandidates(fsRoot: string): MorphCandidate[] {
         continue;
       }
       if (entry.isDirectory()) {
-        const vizEntries = fs.readdirSync(absPath, { withFileTypes: true });
-        for (const vizEntry of vizEntries) {
-          if (!vizEntry.isFile() || !vizEntry.name.endsWith("_canonical_rotation.ply")) {
-            continue;
-          }
-
-          const step = vizEntry.name.slice(0, -"_canonical_rotation.ply".length);
-          const deltaName = `${step}_offset_delta.ply`;
-          const deltaAbsPath = path.join(absPath, deltaName);
-          if (!fs.existsSync(deltaAbsPath) || !fs.statSync(deltaAbsPath).isFile()) {
-            continue;
-          }
-
-          const relVizDir = path.relative(fsRoot, absPath).split(path.sep).join("/");
-          const relAnchorPath = path.join(relVizDir, vizEntry.name).split(path.sep).join("/");
-          const relDeltaPath = path.join(relVizDir, deltaName).split(path.sep).join("/");
-          const modelDir = path.basename(path.dirname(relAnchorPath));
-          candidates.push({
-            anchorPath: relAnchorPath,
-            deltaPath: relDeltaPath,
-            fileName: vizEntry.name,
-            label: `${modelDir || "."} :: ${step}`,
-            modelName: modelDir || ".",
-            step,
-            vizDir: relVizDir,
-          });
-        }
-
         walk(absPath);
       }
     }
@@ -70,7 +101,13 @@ function listSam3dgsMorphCandidates(fsRoot: string): MorphCandidate[] {
     if (a.modelName !== b.modelName) {
       return a.modelName.localeCompare(b.modelName);
     }
-    return b.step.localeCompare(a.step);
+    if (a.step !== b.step) {
+      return b.step.localeCompare(a.step);
+    }
+    if (a.variant !== b.variant) {
+      return a.variant.localeCompare(b.variant);
+    }
+    return a.fileName.localeCompare(b.fileName);
   });
   return candidates;
 }
@@ -209,11 +246,15 @@ export default defineConfig(({ mode }) => {
 
             if (fs.existsSync(absPath) && fs.statSync(absPath).isFile()) {
               const ext = path.extname(absPath).toLowerCase();
+              if (ext === ".bin" || ext === ".ply") {
+                console.log(`[sam3dgs] serve ${ext} ${relPath}`);
+              }
               const contentType =
                 {
                   ".js": "application/javascript",
                   ".json": "application/json",
                   ".ply": "application/octet-stream",
+                  ".bin": "application/octet-stream",
                   ".spz": "application/octet-stream",
                   ".splat": "application/octet-stream",
                   ".ksplat": "application/octet-stream",

@@ -89,6 +89,9 @@ export {
   Uint8ToFloat,
   Sint8ToFloat,
   setPackedSplat,
+  setPackedSplatCenter,
+  setPackedSplatOpacity,
+  setPackedSplatScales,
   unpackSplat,
 } from "./utils";
 export * as utils from "./utils";
