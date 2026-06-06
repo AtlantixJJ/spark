@@ -17,7 +17,7 @@ type MorphCandidate = {
   vizDir: string;
 };
 
-function listSam3dgsMorphCandidates(fsRoot: string): MorphCandidate[] {
+function listSam3dgsMorphCandidates(fsRoot: string, scanTarget: "expr" | "expr-visualize" = "expr"): MorphCandidate[] {
   const exprRoot = path.join(fsRoot, "expr");
   if (!fs.existsSync(exprRoot) || !fs.statSync(exprRoot).isDirectory()) {
     return [];
@@ -28,12 +28,12 @@ function listSam3dgsMorphCandidates(fsRoot: string): MorphCandidate[] {
   const pairSpecs = [
     {
       anchorSuffix: "_canonical.ply",
-      deltaSuffix: "_canonical_delta.bin",
+      deltaSuffixes: ["_canonical_delta.bin", "_canonical_offset_xyz.bin"],
       variant: "canonical",
     },
     {
       anchorSuffix: "_posed.ply",
-      deltaSuffix: "_posed_delta.bin",
+      deltaSuffixes: ["_posed_delta.bin"],
       variant: "posed",
     },
   ];
@@ -53,15 +53,24 @@ function listSam3dgsMorphCandidates(fsRoot: string): MorphCandidate[] {
       }
 
       const step = entry.name.slice(0, -pairSpec.anchorSuffix.length);
-      const deltaName = `${step}${pairSpec.deltaSuffix}`;
-      const deltaAbsPath = path.join(targetDir, deltaName);
-      if (!fs.existsSync(deltaAbsPath) || !fs.statSync(deltaAbsPath).isFile()) {
-        continue;
+      let deltaName = "";
+      for (const suffix of pairSpec.deltaSuffixes) {
+        const candidate = path.join(targetDir, `${step}${suffix}`);
+        if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+          deltaName = `${step}${suffix}`;
+          break;
+        }
       }
+      const hasDelta = deltaName !== "";
 
       const relDir = path.relative(fsRoot, targetDir).split(path.sep).join("/");
-      const relAnchorPath = path.join(relDir, entry.name).split(path.sep).join("/");
-      const relDeltaPath = path.join(relDir, deltaName).split(path.sep).join("/");
+      const relAnchorPath = path
+        .join(relDir, entry.name)
+        .split(path.sep)
+        .join("/");
+      const relDeltaPath = hasDelta
+        ? path.join(relDir, deltaName).split(path.sep).join("/")
+        : "";
       const candidateKey = `${relAnchorPath}::${relDeltaPath}`;
       if (seen.has(candidateKey)) {
         continue;
@@ -73,7 +82,7 @@ function listSam3dgsMorphCandidates(fsRoot: string): MorphCandidate[] {
         anchorPath: relAnchorPath,
         deltaPath: relDeltaPath,
         fileName: entry.name,
-        label: `${modelDir || "."} :: ${step} :: ${pairSpec.variant}`,
+        label: `${modelDir || "."} :: ${step} :: ${pairSpec.variant}${hasDelta ? "" : " (no delta)"}`,
         modelName: modelDir || ".",
         step,
         variant: pairSpec.variant,
@@ -82,21 +91,31 @@ function listSam3dgsMorphCandidates(fsRoot: string): MorphCandidate[] {
     }
   }
 
-  function walk(currentDir: string) {
+  function walk(currentDir: string, skipVisualizeDir: boolean) {
     scanDirectoryForPairs(currentDir);
     const entries = fs.readdirSync(currentDir, { withFileTypes: true });
     for (const entry of entries) {
       const absPath = path.join(currentDir, entry.name);
-      if (entry.name === "deprecated") {
+      if (entry.name === "deprecated" || entry.name === "results" || entry.name === "results-old") {
+        continue;
+      }
+      if (skipVisualizeDir && entry.name === "visualize") {
         continue;
       }
       if (entry.isDirectory()) {
-        walk(absPath);
+        walk(absPath, skipVisualizeDir);
       }
     }
   }
 
-  walk(exprRoot);
+  if (scanTarget === "expr-visualize") {
+    const visualizeRoot = path.join(exprRoot, "visualize");
+    if (fs.existsSync(visualizeRoot) && fs.statSync(visualizeRoot).isDirectory()) {
+      walk(visualizeRoot, false);
+    }
+  } else {
+    walk(exprRoot, true);
+  }
   candidates.sort((a, b) => {
     if (a.modelName !== b.modelName) {
       return a.modelName.localeCompare(b.modelName);
@@ -110,6 +129,60 @@ function listSam3dgsMorphCandidates(fsRoot: string): MorphCandidate[] {
     return a.fileName.localeCompare(b.fileName);
   });
   return candidates;
+}
+
+function listPlyFiles(fsRoot: string, scopeRelPath: string): string[] {
+  const scopeAbs = path.resolve(fsRoot, scopeRelPath);
+  if (!fs.existsSync(scopeAbs) || !fs.statSync(scopeAbs).isDirectory()) {
+    return [];
+  }
+
+  const results: string[] = [];
+
+  function scanForPly(dir: string, relDir: string) {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name.toLowerCase().endsWith(".ply")) {
+        results.push(`${relDir}/${entry.name}`);
+      }
+    }
+  }
+
+  // depth 1: scopeRelPath/sub/*.ply
+  let depth1Entries: fs.Dirent[];
+  try {
+    depth1Entries = fs.readdirSync(scopeAbs, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  for (const sub of depth1Entries) {
+    if (!sub.isDirectory()) continue;
+    const sub1Abs = path.join(scopeAbs, sub.name);
+    const sub1Rel = `${scopeRelPath}/${sub.name}`;
+    scanForPly(sub1Abs, sub1Rel);
+
+    // depth 2: scopeRelPath/sub/subsub/*.ply
+    let depth2Entries: fs.Dirent[];
+    try {
+      depth2Entries = fs.readdirSync(sub1Abs, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const sub2 of depth2Entries) {
+      if (!sub2.isDirectory()) continue;
+      const sub2Abs = path.join(sub1Abs, sub2.name);
+      const sub2Rel = `${sub1Rel}/${sub2.name}`;
+      scanForPly(sub2Abs, sub2Rel);
+    }
+  }
+
+  results.sort();
+  return results;
 }
 
 /**
@@ -223,14 +296,31 @@ export default defineConfig(({ mode }) => {
         configureServer(server) {
           const urlPrefix = "/local/";
           const morphCandidatesUrl = "/sam3dgs/morph-candidates";
+          const plyFilesUrl = "/sam3dgs/ply-files";
           const fsRoot = path.resolve(__dirname, "..", "..");
 
           server.middlewares.use((req, res, next) => {
             const url = req.url?.split("?")[0] ?? "";
             if (url === morphCandidatesUrl) {
-              const candidates = listSam3dgsMorphCandidates(fsRoot);
+              const rawScanTarget = new URLSearchParams(req.url?.split("?")[1] ?? "").get("scanTarget") ?? "expr";
+              const scanTarget = rawScanTarget === "expr-visualize" ? "expr-visualize" : "expr";
+              const candidates = listSam3dgsMorphCandidates(fsRoot, scanTarget);
               res.setHeader("Content-Type", "application/json");
               res.end(JSON.stringify({ candidates }));
+              return;
+            }
+            if (url === plyFilesUrl) {
+              const rawScope = new URLSearchParams(req.url?.split("?")[1] ?? "").get("scope") ?? "expr";
+              // Prevent path traversal: scope must stay within fsRoot
+              const scopeAbs = path.resolve(fsRoot, rawScope);
+              if (!scopeAbs.startsWith(path.resolve(fsRoot))) {
+                res.statusCode = 403;
+                res.end("Forbidden");
+                return;
+              }
+              const files = listPlyFiles(fsRoot, rawScope);
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ files }));
               return;
             }
             if (!url.startsWith(urlPrefix)) return next();
@@ -273,6 +363,7 @@ export default defineConfig(({ mode }) => {
 
           console.log(`📁 Local files active: ${urlPrefix} → ${fsRoot}`);
           console.log(`🧭 Morph candidates active: ${morphCandidatesUrl}`);
+          console.log(`🔍 PLY file search active: ${plyFilesUrl}?scope=<rel-path>`);
         },
       },
     ],

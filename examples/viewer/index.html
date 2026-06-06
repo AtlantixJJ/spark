@@ -133,6 +133,68 @@
       color: rgb(170, 170, 170);
     }
 
+    .folder-search {
+      width: 100%;
+      max-width: 500px;
+      margin: 0.5rem 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .folder-search-row {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+    }
+
+    .folder-search label {
+      color: rgb(113, 113, 113);
+      font-size: 0.85rem;
+      white-space: nowrap;
+    }
+
+    .scope-select,
+    .ply-select {
+      flex: 1;
+      background-color: rgb(47, 47, 47);
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      font-size: 1rem;
+      padding: 0.6rem 0.5rem;
+      cursor: pointer;
+    }
+
+    .scope-select option,
+    .ply-select option {
+      background-color: rgb(47, 47, 47);
+    }
+
+    .ply-select:disabled {
+      color: rgb(89, 89, 89);
+    }
+
+    .ply-load-btn {
+      background-color: rgb(60, 60, 60);
+      border: none;
+      border-radius: 6px;
+      color: #ccc;
+      font-size: 1rem;
+      padding: 0.6rem 1rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .ply-load-btn:hover:not(:disabled) {
+      background-color: rgb(90, 90, 90);
+    }
+
+    .ply-load-btn:disabled {
+      color: rgb(89, 89, 89);
+      cursor: default;
+    }
+
     @media (min-width: 600px) {
       .button,
       .url-input,
@@ -485,6 +547,52 @@
       history.pushState(null, '', url);
     });
 
+    const scopeSelectEl = document.querySelector('.scope-select');
+    const plySelectEl = document.querySelector('.ply-select');
+    const plyLoadBtnEl = document.querySelector('.ply-load-btn');
+
+    async function fetchPlyFiles(scope) {
+      plySelectEl.disabled = true;
+      plySelectEl.innerHTML = '<option value="">Loading...</option>';
+      plyLoadBtnEl.disabled = true;
+      try {
+        const resp = await fetch(`/sam3dgs/ply-files?scope=${encodeURIComponent(scope)}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const { files } = await resp.json();
+        plySelectEl.innerHTML = '';
+        if (files.length === 0) {
+          plySelectEl.innerHTML = '<option value="">No .ply files found</option>';
+        } else {
+          plySelectEl.appendChild(Object.assign(document.createElement('option'), { value: '', textContent: `-- ${files.length} file(s) --` }));
+          for (const f of files) {
+            const opt = document.createElement('option');
+            opt.value = f;
+            opt.textContent = f;
+            plySelectEl.appendChild(opt);
+          }
+          plySelectEl.disabled = false;
+        }
+      } catch (err) {
+        plySelectEl.innerHTML = `<option value="">Error: ${err.message}</option>`;
+      }
+    }
+
+    scopeSelectEl.addEventListener('change', () => fetchPlyFiles(scopeSelectEl.value));
+    fetchPlyFiles(scopeSelectEl.value);
+
+    plySelectEl.addEventListener('change', () => {
+      plyLoadBtnEl.disabled = !plySelectEl.value;
+    });
+
+    plyLoadBtnEl.addEventListener('click', () => {
+      const selected = plySelectEl.value;
+      if (!selected) return;
+      loadSplatURL(selected);
+      const url = new URL(window.location);
+      url.searchParams.set('url', selected);
+      history.pushState(null, '', url);
+    });
+
     document.querySelector('.spz-button').addEventListener('click', async function () {
       const fileInfo =  {
         fileBytes: fileBytes,
@@ -530,6 +638,21 @@
       <form class="url-form">
         <input class="url-input" type="text" placeholder="URL or repo path (e.g. expr/infer_lhmpp/avatar_lhm_canonical_spark.ply)" />
       </form>
+      <div class="folder-search">
+        <div class="folder-search-row">
+          <label for="scope-select">Search in:</label>
+          <select id="scope-select" class="scope-select">
+            <option value="expr">expr/</option>
+            <option value="expr/results">expr/results/</option>
+          </select>
+        </div>
+        <div class="folder-search-row">
+          <select class="ply-select" disabled>
+            <option value="">Loading...</option>
+          </select>
+          <button class="ply-load-btn" disabled>Load</button>
+        </div>
+      </div>
     </div>
   </div>
 </body>
