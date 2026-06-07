@@ -402,6 +402,7 @@
 
     let anchorMesh = null;
     let deltaOffsets = null;
+    let hasDelta = false;
     let anchorOriginalCenters = null;
     let anchorOriginalScales = null;
     let anchorOriginalOpacities = null;
@@ -442,6 +443,7 @@
         anchorMesh = null;
       }
       deltaOffsets = null;
+      hasDelta = false;
       anchorOriginalCenters = null;
       anchorOriginalScales = null;
       anchorOriginalOpacities = null;
@@ -536,7 +538,11 @@
       }
       anchorMesh.packedSplats.needsUpdate = true;
       anchorMesh.updateVersion();
-      alphaController.enable();
+      if (hasDelta) {
+        alphaController.enable();
+      } else {
+        alphaController.disable();
+      }
       scaleController.enable();
       opacityController.enable();
       hideInstructions();
@@ -582,6 +588,7 @@
       if (!anchorMesh) return;
       if (!url) {
         deltaOffsets = new Float32Array(anchorMesh.packedSplats.numSplats * 3);
+        hasDelta = false;
         console.log("[morph-offset] Using implicit zero delta for anchor:", settings.anchorPath);
         applyVisualizationState();
         return;
@@ -600,6 +607,7 @@
       if (deltaOffsets.length !== expectedCount) {
         throw new Error(`Offset count mismatch! Anchor: ${anchorMesh.packedSplats.numSplats}, Delta entries: ${deltaOffsets.length / 3}`);
       }
+      hasDelta = true;
       logDeltaStats(resolvedUrl, deltaOffsets);
       applyVisualizationState();
     }

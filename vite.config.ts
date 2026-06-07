@@ -36,6 +36,21 @@ function listSam3dgsMorphCandidates(fsRoot: string, scanTarget: "expr" | "expr-v
       deltaSuffixes: ["_posed_delta.bin"],
       variant: "posed",
     },
+    {
+      anchorSuffix: "_fac_gs.ply",
+      deltaSuffixes: [],
+      variant: "fac",
+    },
+    {
+      anchorSuffix: "_posed_gs.ply",
+      deltaSuffixes: [],
+      variant: "posed_gs",
+    },
+    {
+      anchorSuffix: "_image_gs.ply",
+      deltaSuffixes: [],
+      variant: "image_gs",
+    },
   ];
 
   function scanDirectoryForPairs(targetDir: string) {
