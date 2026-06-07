@@ -1,5 +1,17 @@
-export { SparkRenderer, type SparkRendererOptions } from "./SparkRenderer";
-export { SparkViewpoint, type SparkViewpointOptions } from "./SparkViewpoint";
+export {
+  OldSparkRenderer,
+  type OldSparkRendererOptions,
+} from "./OldSparkRenderer";
+export {
+  OldSparkViewpoint,
+  type OldSparkViewpointOptions,
+} from "./OldSparkViewpoint";
+
+export {
+  SparkRenderer,
+  type SparkRendererOptions,
+} from "./SparkRenderer";
+export { SplatAccumulator, type GeneratorMapping } from "./SplatAccumulator";
 
 export * as dyno from "./dyno";
 
@@ -8,7 +20,6 @@ export { RgbaArray, readRgbaArray } from "./RgbaArray";
 export {
   SplatLoader,
   unpackSplats,
-  SplatFileType,
   getSplatFileType,
   isPcSogs,
 } from "./SplatLoader";
@@ -16,6 +27,8 @@ export { PlyReader } from "./ply";
 export { SpzReader, SpzWriter, transcodeSpz } from "./spz";
 
 export { PackedSplats, type PackedSplatsOptions } from "./PackedSplats";
+export { ExtSplats, type ExtSplatsOptions } from "./ExtSplats";
+export * from "./SplatPager";
 export {
   SplatGenerator,
   type GsplatGenerator,
@@ -23,7 +36,7 @@ export {
   type GsplatModifier,
   SplatTransformer,
 } from "./SplatGenerator";
-export { SplatAccumulator, type GeneratorMapping } from "./SplatAccumulator";
+export { OldSplatAccumulator } from "./OldSplatAccumulator";
 export { Readback, type Rgba8Readback, type ReadbackBuffer } from "./Readback";
 
 export {
@@ -31,7 +44,11 @@ export {
   type SplatMeshOptions,
   type SplatMeshContext,
 } from "./SplatMesh";
-export { SplatSkinning, type SplatSkinningOptions } from "./SplatSkinning";
+export {
+  SplatSkinning,
+  type SplatSkinningOptions,
+  SplatSkinningMode,
+} from "./SplatSkinning";
 export {
   SplatEdit,
   type SplatEditOptions,
@@ -53,7 +70,7 @@ export {
 export * as generators from "./generators";
 export * as modifiers from "./modifiers";
 
-export { VRButton } from "./vrButton";
+export * from "./SparkXr";
 export {
   type JointId,
   JointEnum,
@@ -80,6 +97,9 @@ export {
   isMobile,
   isAndroid,
   isOculus,
+  isQuest2,
+  isIos,
+  isVisionPro,
   flipPixels,
   pixelsToPngUrl,
   toHalf,
@@ -96,5 +116,13 @@ export {
 } from "./utils";
 export * as utils from "./utils";
 
-export { LN_SCALE_MIN, LN_SCALE_MAX } from "./defines";
+export { LN_SCALE_MIN, LN_SCALE_MAX, SplatFileType } from "./defines";
+
 export * as defines from "./defines";
+
+export {
+  SparkPortals,
+  type SparkPortalsOptions,
+  type PortalPair,
+  DISK_PORTAL_FRAGMENT_SHADER,
+} from "./SparkPortals";

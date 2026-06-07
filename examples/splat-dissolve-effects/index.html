@@ -24,7 +24,7 @@
 	<script type="module">
 		import * as THREE from "three";
 		import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-		import { SplatMesh, dyno } from "@sparkjsdev/spark";
+		import { SparkRenderer, SplatMesh, dyno } from "@sparkjsdev/spark";
 		import { getAssetFileURL } from "/examples/js/get-asset-url.js";
 
 		const flyPos = new THREE.Vector3(0, 0, -0.5);
@@ -44,6 +44,8 @@
 			renderer.setSize(window.innerWidth, window.innerHeight);
 		}
 
+		const spark = new SparkRenderer({ renderer });
+		scene.add(spark);
 		/*
 			Asset: fly.spz
 			Author: Danny Bittel (https://danybittel.ch/)

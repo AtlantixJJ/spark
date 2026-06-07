@@ -239,15 +239,16 @@
   <script type="importmap">
     {
       "imports": {
-        "three": "/examples/js/vendor/three/build/three.module.js",
+        "three": "../js/vendor/three/build/three.module.js",
         "three/addons/": "/examples/js/vendor/three/examples/jsm/",
-        "@sparkjsdev/spark": "/dist/spark.module.js"
+        "@sparkjsdev/spark": "../../dist/spark.module.js"
       }
     }
   </script>
   <script type="module">
     import * as THREE from "three";
-    import { SplatMesh, transcodeSpz, SparkControls } from "@sparkjsdev/spark";
+    import { SparkRenderer, SplatMesh, transcodeSpz, SparkControls } from "@sparkjsdev/spark";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
     const PLY_TYPE_BYTES = {
       char: 1,
@@ -270,6 +271,9 @@
     var fileName;
     var fileBytes;
     renderer.setSize(width, height, false);
+    
+    const spark = new SparkRenderer({ renderer });
+    scene.add(spark);
 
     const controls = new SparkControls({ canvas: sparkCanvasEl });
     // const orbitControls = new OrbitControls(camera, renderer.domElement);
