@@ -20,10 +20,16 @@
       outline: none;
       touch-action: none;
     }
-    #gui-container {
+    #right-panel {
       position: absolute;
-      top: 10px;
+      top: 66px;
       right: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: stretch;
+      max-width: 310px;
+      min-width: 245px;
     }
     #instructions {
       position: absolute;
@@ -57,16 +63,147 @@
       color: #fff;
       border: 1px solid #333;
       border-radius: 8px;
-      padding: 8px 10px;
+      padding: 0 10px;
+      height: 36px;
+      box-sizing: border-box;
       font: inherit;
     }
     #candidate-select {
-      min-width: 320px;
+      min-width: 200px;
+      max-width: 320px;
     }
     #candidate-status {
       color: #bbb;
       font-size: 12px;
-      min-width: 120px;
+      min-width: 80px;
+    }
+    #filter-wrapper {
+      position: relative;
+    }
+    #filter-btn {
+      background: #161616;
+      color: #fff;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 0 10px;
+      height: 36px;
+      box-sizing: border-box;
+      font: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #filter-btn:hover {
+      border-color: #555;
+    }
+    #filter-panel {
+      display: none;
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 8px 10px;
+      z-index: 100;
+      min-width: 150px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    }
+    #filter-panel.open {
+      display: block;
+    }
+    .filter-label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 2px;
+      cursor: pointer;
+      font-size: 13px;
+      color: #ddd;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .filter-label:hover {
+      color: #fff;
+    }
+    .filter-label input[type="checkbox"] {
+      accent-color: #888;
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+    }
+    .filter-count {
+      color: #666;
+      font-size: 11px;
+      margin-left: auto;
+    }
+    #loaded-gs-panel {
+      background: rgba(18, 18, 18, 0.88);
+      backdrop-filter: blur(6px);
+      border-radius: 10px;
+      padding: 8px 12px;
+      color: #fff;
+      font-size: 13px;
+    }
+    #gs-empty {
+      color: #555;
+      font-size: 12px;
+      padding: 4px 2px;
+      font-style: italic;
+    }
+    #loaded-gs-panel .gs-header {
+      font-weight: bold;
+      margin-bottom: 6px;
+      color: #888;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .gs-entry {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 0;
+      border-bottom: 1px solid #2a2a2a;
+    }
+    .gs-entry:last-child {
+      border-bottom: none;
+    }
+    .gs-label {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 12px;
+      color: #ddd;
+    }
+    .gs-toggle {
+      background: #1e1e1e;
+      border: 1px solid #444;
+      color: #eee;
+      border-radius: 4px;
+      padding: 2px 7px;
+      cursor: pointer;
+      font-size: 11px;
+      flex-shrink: 0;
+      line-height: 1.4;
+    }
+    .gs-toggle.hidden-gs {
+      color: #555;
+      border-color: #333;
+    }
+    .gs-remove {
+      background: #1e1e1e;
+      border: 1px solid #444;
+      color: #c55;
+      border-radius: 4px;
+      padding: 2px 6px;
+      cursor: pointer;
+      font-size: 11px;
+      flex-shrink: 0;
+      line-height: 1.4;
+    }
+    .gs-remove:hover {
+      background: #3a1515;
     }
   </style>
 </head>
@@ -78,18 +215,35 @@
       <option value="expr">expr (excl. visualize)</option>
       <option value="expr-visualize">expr/visualize</option>
     </select>
+    <div id="filter-wrapper">
+      <button id="filter-btn" type="button">Filter ▾</button>
+      <div id="filter-panel">
+        <label class="filter-label"><input type="checkbox" id="filter-fac" checked> FAC GS <span class="filter-count" id="count-fac"></span></label>
+        <label class="filter-label"><input type="checkbox" id="filter-image-gs" checked> Image GS <span class="filter-count" id="count-image-gs"></span></label>
+        <label class="filter-label"><input type="checkbox" id="filter-canonical" checked> Canonical <span class="filter-count" id="count-canonical"></span></label>
+        <label class="filter-label"><input type="checkbox" id="filter-posed" checked> Posed <span class="filter-count" id="count-posed"></span></label>
+      </div>
+    </div>
     <select id="candidate-select">
       <option value="">Select expr candidate</option>
     </select>
-    <button id="candidate-refresh" type="button">Refresh Candidates</button>
+    <button id="candidate-refresh" type="button">Refresh</button>
     <button id="candidate-load" type="button">Load Selected</button>
     <span id="candidate-status"></span>
   </div>
-  <div id="gui-container"></div>
+  <div id="right-panel">
+    <div id="gui-container"></div>
+    <div id="loaded-gs-panel">
+      <div class="gs-header">Loaded GS (max 5)</div>
+      <div id="gs-list">
+        <div id="gs-empty">No GS loaded</div>
+      </div>
+    </div>
+  </div>
   <div id="instructions">
     <h1>Offset Morph Viewer</h1>
-    <p>1. Refresh and pick a candidate, or edit paths manually</p>
-    <p>2. Click Load Selected or Load Morph Pair</p>
+    <p>1. Refresh and pick a candidate</p>
+    <p>2. Click Load Selected (up to 5 GS)</p>
     <p>3. Use the morph sliders</p>
   </div>
 
@@ -118,9 +272,7 @@
     } from "@sparkjsdev/spark";
 
     const MORPH_CANDIDATES_URL = "/sam3dgs/morph-candidates";
-    const DEFAULT_ANCHOR_URL = "";
-    const DEFAULT_DELTA_URL = "";
-    const urlParams = new URLSearchParams(window.location.search);
+    const MAX_GS = 5;
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#000000");
@@ -133,6 +285,9 @@
     const candidateRefreshButton = document.getElementById("candidate-refresh");
     const candidateLoadButton = document.getElementById("candidate-load");
     const candidateStatus = document.getElementById("candidate-status");
+    const loadedGsPanel = document.getElementById("loaded-gs-panel");
+    const gsList = document.getElementById("gs-list");
+
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     const spark = new SparkRenderer({ renderer });
     scene.add(spark);
@@ -159,15 +314,9 @@
     const cameraDirection = new THREE.Vector3();
     let lastFrameTime = performance.now();
 
-    document.addEventListener("keydown", (event) => {
-      pressedKeys.add(event.code);
-    });
-    document.addEventListener("keyup", (event) => {
-      pressedKeys.delete(event.code);
-    });
-    window.addEventListener("blur", () => {
-      pressedKeys.clear();
-    });
+    document.addEventListener("keydown", (event) => { pressedKeys.add(event.code); });
+    document.addEventListener("keyup", (event) => { pressedKeys.delete(event.code); });
+    window.addEventListener("blur", () => { pressedKeys.clear(); });
 
     function updateKeyboardPan(deltaTime) {
       let x = 0;
@@ -176,9 +325,7 @@
       if (pressedKeys.has("KeyD")) x += 1;
       if (pressedKeys.has("KeyW")) y += 1;
       if (pressedKeys.has("KeyS")) y -= 1;
-      if (x === 0 && y === 0) {
-        return;
-      }
+      if (x === 0 && y === 0) return;
 
       camera.getWorldDirection(cameraDirection);
       panRight.crossVectors(cameraDirection, camera.up).normalize();
@@ -196,18 +343,72 @@
 
     const gui = new GUI({ container: document.getElementById("gui-container") });
     let morphCandidates = [];
-    let activeVariant = "";
+
+    // --- Filter dropdown ---
+    const filterBtn = document.getElementById("filter-btn");
+    const filterPanel = document.getElementById("filter-panel");
+    const filterFac = document.getElementById("filter-fac");
+    const filterImageGs = document.getElementById("filter-image-gs");
+    const filterCanonical = document.getElementById("filter-canonical");
+    const filterPosed = document.getElementById("filter-posed");
+
+    filterBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      filterPanel.classList.toggle("open");
+    });
+    document.addEventListener("click", (e) => {
+      if (!filterPanel.contains(e.target) && e.target !== filterBtn) {
+        filterPanel.classList.remove("open");
+      }
+    });
+
+    function variantMatchesFilter(variant) {
+      if (variant === "fac") return filterFac.checked;
+      if (variant === "image_gs") return filterImageGs.checked;
+      if (variant === "canonical") return filterCanonical.checked;
+      if (variant === "posed" || variant === "posed_gs") return filterPosed.checked;
+      return true;
+    }
+
+    function updateFilterCounts() {
+      const counts = { fac: 0, image_gs: 0, canonical: 0, posed: 0 };
+      for (const c of morphCandidates) {
+        if (c.variant === "fac") counts.fac++;
+        else if (c.variant === "image_gs") counts.image_gs++;
+        else if (c.variant === "canonical") counts.canonical++;
+        else if (c.variant === "posed" || c.variant === "posed_gs") counts.posed++;
+      }
+      document.getElementById("count-fac").textContent = counts.fac ? `(${counts.fac})` : "";
+      document.getElementById("count-image-gs").textContent = counts.image_gs ? `(${counts.image_gs})` : "";
+      document.getElementById("count-canonical").textContent = counts.canonical ? `(${counts.canonical})` : "";
+      document.getElementById("count-posed").textContent = counts.posed ? `(${counts.posed})` : "";
+    }
+
+    function rebuildCandidateSelect() {
+      const filtered = morphCandidates.filter(c => variantMatchesFilter(c.variant));
+      candidateSelect.innerHTML = "";
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = filtered.length > 0 ? "Select expr candidate" : "No candidates match filter";
+      candidateSelect.appendChild(placeholder);
+      for (const candidate of filtered) {
+        const option = document.createElement("option");
+        option.value = candidate.anchorPath;
+        option.textContent = candidate.label;
+        candidateSelect.appendChild(option);
+      }
+    }
+
+    [filterFac, filterImageGs, filterCanonical, filterPosed].forEach(cb => {
+      cb.addEventListener("change", rebuildCandidateSelect);
+    });
+
     const settings = {
-      anchorPath: urlParams.get("anchor") || DEFAULT_ANCHOR_URL,
-      deltaPath: urlParams.get("delta") || DEFAULT_DELTA_URL,
       alpha: 0,
       scaleMultiplier: 1,
       opacityMultiplier: 1,
       autoRotate: false,
       backgroundColor: "#000000",
-      loadMorphPair: async () => {
-        await loadMorphPair(settings.anchorPath, settings.deltaPath);
-      },
       resetCamera: () => {
         camera.position.set(0, 0, 2);
         orbitControls.target.set(0, 0, 0);
@@ -216,7 +417,6 @@
       renderToImage: () => {
         const RENDER_SIZE = 1024;
 
-        // Save renderer / camera state
         const savedRendererSize = new THREE.Vector2();
         renderer.getSize(savedRendererSize);
         const savedAspect = camera.aspect;
@@ -224,14 +424,12 @@
         const savedClearColor = renderer.getClearColor(new THREE.Color());
         const savedClearAlpha = renderer.getClearAlpha();
 
-        // Save canvas CSS state
         const cs = canvas.style;
         const savedStyle = {
           position: cs.position, width: cs.width, height: cs.height,
           left: cs.left, top: cs.top, transform: cs.transform, zIndex: cs.zIndex,
         };
 
-        // Resize canvas to 1024×1024 centered
         cs.position = "fixed";
         cs.width = `${RENDER_SIZE}px`;
         cs.height = `${RENDER_SIZE}px`;
@@ -243,7 +441,6 @@
         camera.aspect = 1.0;
         camera.updateProjectionMatrix();
 
-        // Render to transparent target
         const renderTarget = new THREE.WebGLRenderTarget(RENDER_SIZE, RENDER_SIZE, {
           format: THREE.RGBAFormat,
           type: THREE.UnsignedByteType,
@@ -254,7 +451,6 @@
         renderer.render(scene, camera);
         renderer.setRenderTarget(null);
 
-        // Read pixels and flip vertically (WebGL is bottom-up)
         const pixels = new Uint8Array(RENDER_SIZE * RENDER_SIZE * 4);
         renderer.readRenderTargetPixels(renderTarget, 0, 0, RENDER_SIZE, RENDER_SIZE, pixels);
         renderTarget.dispose();
@@ -264,7 +460,6 @@
           flipped.set(pixels.subarray(srcRow, srcRow + RENDER_SIZE * 4), y * RENDER_SIZE * 4);
         }
 
-        // Restore canvas, renderer, camera
         cs.position = savedStyle.position;
         cs.width = savedStyle.width;
         cs.height = savedStyle.height;
@@ -278,7 +473,6 @@
         camera.aspect = savedAspect;
         camera.updateProjectionMatrix();
 
-        // Download PNG
         const offscreenCanvas = document.createElement("canvas");
         offscreenCanvas.width = RENDER_SIZE;
         offscreenCanvas.height = RENDER_SIZE;
@@ -298,9 +492,6 @@
       },
     };
 
-    gui.add(settings, "anchorPath").name("Anchor Path");
-    gui.add(settings, "deltaPath").name("Delta Path");
-    gui.add(settings, "loadMorphPair").name("Load Morph Pair");
     const alphaController = gui.add(settings, "alpha", 0, 1, 0.01).name("Position Morph").disable();
     const scaleController = gui.add(settings, "scaleMultiplier", 0, 1, 0.01).name("Scale").disable();
     const opacityController = gui.add(settings, "opacityMultiplier", 0, 1, 0.01).name("Opacity").disable();
@@ -309,14 +500,15 @@
     gui.add(settings, "resetCamera").name("Reset Camera");
     gui.add(settings, "renderToImage").name("Render");
 
+    // --- Loaded GS state ---
+    const loadedSplats = [];
+
     function setCandidateStatus(message) {
       candidateStatus.textContent = message;
     }
 
     function resolveLocalPath(pathValue) {
-      if (!pathValue) {
-        return pathValue;
-      }
+      if (!pathValue) return pathValue;
       if (
         pathValue.startsWith("/local/") ||
         pathValue.startsWith("http://") ||
@@ -328,57 +520,10 @@
       return `/local/${pathValue.replace(/^\.?\//, "")}`;
     }
 
-    function updateGuiControllers() {
-      for (const controller of gui.controllers) {
-        controller.updateDisplay();
-      }
-    }
-
-    function syncCandidateSelection() {
-      const matchedCandidate = morphCandidates.find((candidate) => {
-        return (
-          resolveLocalPath(candidate.anchorPath) === settings.anchorPath &&
-          resolveLocalPath(candidate.deltaPath) === settings.deltaPath
-        );
-      });
-      candidateSelect.value = matchedCandidate ? matchedCandidate.anchorPath : "";
-      if (matchedCandidate) {
-        activeVariant = matchedCandidate.variant;
-      } else {
-        activeVariant = "";
-      }
-    }
-
-    function applyCandidate(candidate) {
-      settings.anchorPath = resolveLocalPath(candidate.anchorPath);
-      settings.deltaPath = resolveLocalPath(candidate.deltaPath);
-      activeVariant = candidate.variant;
-      updateGuiControllers();
-      syncCandidateSelection();
-    }
-
     function populateCandidateSelect(candidates) {
       morphCandidates = candidates;
-      const currentValue = candidateSelect.value;
-      candidateSelect.innerHTML = "";
-
-      const placeholderOption = document.createElement("option");
-      placeholderOption.value = "";
-      placeholderOption.textContent = candidates.length > 0 ? "Select expr candidate" : "No candidates found";
-      candidateSelect.appendChild(placeholderOption);
-
-      for (const candidate of candidates) {
-        const option = document.createElement("option");
-        option.value = candidate.anchorPath;
-        option.textContent = candidate.label;
-        candidateSelect.appendChild(option);
-      }
-
-      if (candidates.some((candidate) => candidate.anchorPath === currentValue)) {
-        candidateSelect.value = currentValue;
-      } else {
-        syncCandidateSelection();
-      }
+      updateFilterCounts();
+      rebuildCandidateSelect();
     }
 
     async function refreshMorphCandidates() {
@@ -392,7 +537,7 @@
         const payload = await response.json();
         const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
         populateCandidateSelect(candidates);
-        setCandidateStatus(`${candidates.length} candidate${candidates.length === 1 ? "" : "s"}`);
+        setCandidateStatus(`${candidates.length} found`);
       } catch (err) {
         console.error("Failed to refresh morph candidates:", err);
         populateCandidateSelect([]);
@@ -400,82 +545,36 @@
       }
     }
 
-    let anchorMesh = null;
-    let deltaOffsets = null;
-    let hasDelta = false;
-    let anchorOriginalCenters = null;
-    let anchorOriginalScales = null;
-    let anchorOriginalOpacities = null;
-
-    alphaController.onChange(() => {
-      if (anchorMesh && deltaOffsets && anchorOriginalCenters && anchorOriginalScales && anchorOriginalOpacities) {
-        applyVisualizationState();
+    function updateSliderStates() {
+      const anyLoaded = loadedSplats.length > 0;
+      const anyDelta = loadedSplats.some(e => e.hasDelta);
+      if (anyLoaded) {
+        scaleController.enable();
+        opacityController.enable();
+      } else {
+        scaleController.disable();
+        opacityController.disable();
       }
-    });
-
-    scaleController.onChange(() => {
-      if (anchorMesh && deltaOffsets && anchorOriginalCenters && anchorOriginalScales && anchorOriginalOpacities) {
-        applyVisualizationState();
+      if (anyDelta) {
+        alphaController.enable();
+      } else {
+        alphaController.disable();
       }
-    });
-
-    opacityController.onChange(() => {
-      if (anchorMesh && deltaOffsets && anchorOriginalCenters && anchorOriginalScales && anchorOriginalOpacities) {
-        applyVisualizationState();
-      }
-    });
-
-    function resetMorphControls() {
-      settings.alpha = 0;
-      settings.scaleMultiplier = 1;
-      settings.opacityMultiplier = 1;
-      alphaController.updateDisplay();
-      scaleController.updateDisplay();
-      opacityController.updateDisplay();
-      alphaController.disable();
-      scaleController.disable();
-      opacityController.disable();
     }
 
-    function clearAnchorMesh() {
-      if (anchorMesh) {
-        scene.remove(anchorMesh);
-        anchorMesh = null;
-      }
-      deltaOffsets = null;
-      hasDelta = false;
-      anchorOriginalCenters = null;
-      anchorOriginalScales = null;
-      anchorOriginalOpacities = null;
-      resetMorphControls();
+    function updateInstructionsVisibility() {
+      const instructions = document.getElementById("instructions");
+      instructions.style.display = loadedSplats.length > 0 ? "none" : "";
     }
 
-    function hideInstructions() {
-      document.getElementById("instructions").style.display = "none";
+    function updateLoadedGsPanel() {
+      const empty = document.getElementById("gs-empty");
+      if (empty) empty.style.display = loadedSplats.length > 0 ? "none" : "";
     }
 
     function isPosedAnchorPath(pathValue) {
       const pathWithoutQuery = (pathValue || "").split("?")[0];
       return pathWithoutQuery.endsWith("_posed.ply");
-    }
-
-    function shouldConvertAnchorFromColmap(anchorUrl) {
-      return activeVariant === "posed" || isPosedAnchorPath(anchorUrl);
-    }
-
-    async function setAnchorMesh(init) {
-      clearAnchorMesh();
-      anchorMesh = new SplatMesh(init);
-      await anchorMesh.initialized;
-      if (shouldConvertAnchorFromColmap(init.url)) {
-        anchorMesh.rotation.x = Math.PI;
-      }
-      scene.add(anchorMesh);
-      anchorOriginalCenters = extractCenters(anchorMesh);
-      const { scales, opacities } = extractScalesAndOpacities(anchorMesh);
-      anchorOriginalScales = scales;
-      anchorOriginalOpacities = opacities;
-      hideInstructions();
     }
 
     function extractCenters(splatMesh) {
@@ -506,136 +605,183 @@
       return { scales, opacities };
     }
 
-    function applyVisualizationState() {
-      if (!anchorMesh || !deltaOffsets || !anchorOriginalCenters || !anchorOriginalScales || !anchorOriginalOpacities) return;
-      const packed = anchorMesh.packedSplats.packedArray;
-      const numSplats = anchorMesh.packedSplats.numSplats;
+    function applyVisualizationStateToEntry(entry) {
+      if (!entry.anchorMesh || !entry.deltaOffsets || !entry.originalCenters) return;
+      const packed = entry.anchorMesh.packedSplats.packedArray;
+      const numSplats = entry.anchorMesh.packedSplats.numSplats;
       const alpha = settings.alpha;
       const scaleMultiplier = settings.scaleMultiplier;
-      const opacityMultiplier = settings.opacityMultiplier;
+      const opacityMultiplier = entry.visible ? settings.opacityMultiplier : 0;
       for (let i = 0; i < numSplats; i++) {
         const baseOffset = i * 3;
         setPackedSplatCenter(
-          packed,
-          i,
-          anchorOriginalCenters[baseOffset + 0] + alpha * deltaOffsets[baseOffset + 0],
-          anchorOriginalCenters[baseOffset + 1] + alpha * deltaOffsets[baseOffset + 1],
-          anchorOriginalCenters[baseOffset + 2] + alpha * deltaOffsets[baseOffset + 2],
+          packed, i,
+          entry.originalCenters[baseOffset + 0] + alpha * entry.deltaOffsets[baseOffset + 0],
+          entry.originalCenters[baseOffset + 1] + alpha * entry.deltaOffsets[baseOffset + 1],
+          entry.originalCenters[baseOffset + 2] + alpha * entry.deltaOffsets[baseOffset + 2],
         );
         setPackedSplatScales(
-          packed,
-          i,
-          anchorOriginalScales[baseOffset + 0] * scaleMultiplier,
-          anchorOriginalScales[baseOffset + 1] * scaleMultiplier,
-          anchorOriginalScales[baseOffset + 2] * scaleMultiplier,
-          anchorMesh.packedSplats.splatEncoding,
+          packed, i,
+          entry.originalScales[baseOffset + 0] * scaleMultiplier,
+          entry.originalScales[baseOffset + 1] * scaleMultiplier,
+          entry.originalScales[baseOffset + 2] * scaleMultiplier,
+          entry.anchorMesh.packedSplats.splatEncoding,
         );
-        setPackedSplatOpacity(
-          packed,
-          i,
-          anchorOriginalOpacities[i] * opacityMultiplier,
-        );
+        setPackedSplatOpacity(packed, i, entry.originalOpacities[i] * opacityMultiplier);
       }
-      anchorMesh.packedSplats.needsUpdate = true;
-      anchorMesh.updateVersion();
-      if (hasDelta) {
-        alphaController.enable();
-      } else {
-        alphaController.disable();
-      }
-      scaleController.enable();
-      opacityController.enable();
-      hideInstructions();
+      entry.anchorMesh.packedSplats.needsUpdate = true;
+      entry.anchorMesh.updateVersion();
     }
+
+    function applyVisualizationState() {
+      for (const entry of loadedSplats) {
+        applyVisualizationStateToEntry(entry);
+      }
+    }
+
+    alphaController.onChange(() => applyVisualizationState());
+    scaleController.onChange(() => applyVisualizationState());
+    opacityController.onChange(() => applyVisualizationState());
 
     function logDeltaStats(url, offsets) {
       if (!offsets || offsets.length === 0) {
         console.log("[morph-offset] Loaded empty delta file:", url);
         return;
       }
-
       const sampleCount = offsets.length / 3;
-      let absMax = 0;
-      let magMax = 0;
-      let magSum = 0;
-      let nonZeroCount = 0;
-
+      let absMax = 0, magMax = 0, magSum = 0, nonZeroCount = 0;
       for (let i = 0; i < offsets.length; i += 3) {
-        const x = offsets[i + 0];
-        const y = offsets[i + 1];
-        const z = offsets[i + 2];
+        const x = offsets[i + 0], y = offsets[i + 1], z = offsets[i + 2];
         absMax = Math.max(absMax, Math.abs(x), Math.abs(y), Math.abs(z));
         const mag = Math.hypot(x, y, z);
         magMax = Math.max(magMax, mag);
         magSum += mag;
-        if (mag > 1e-8) {
-          nonZeroCount += 1;
-        }
+        if (mag > 1e-8) nonZeroCount += 1;
       }
-
       console.log("[morph-offset] Loaded delta file", {
-        url,
-        sampleCount,
-        absMax,
-        magMean: magSum / sampleCount,
-        magMax,
-        nonZeroCount,
+        url, sampleCount, absMax,
+        magMean: magSum / sampleCount, magMax, nonZeroCount,
         firstOffsets: Array.from(offsets.slice(0, 12)),
       });
     }
 
-    async function setDeltaOffsets(url) {
-      if (!anchorMesh) return;
-      if (!url) {
-        deltaOffsets = new Float32Array(anchorMesh.packedSplats.numSplats * 3);
-        hasDelta = false;
-        console.log("[morph-offset] Using implicit zero delta for anchor:", settings.anchorPath);
-        applyVisualizationState();
+    function removeGSEntry(entry) {
+      const idx = loadedSplats.indexOf(entry);
+      if (idx === -1) return;
+      loadedSplats.splice(idx, 1);
+      if (entry.anchorMesh) scene.remove(entry.anchorMesh);
+      if (entry.domRow) entry.domRow.remove();
+      updateLoadedGsPanel();
+      updateSliderStates();
+      updateInstructionsVisibility();
+      setCandidateStatus(`${loadedSplats.length}/${MAX_GS} loaded`);
+    }
+
+    function toggleGSVisibility(entry) {
+      entry.visible = !entry.visible;
+      entry.domToggle.textContent = entry.visible ? "👁" : "👁‍🗨";
+      entry.domToggle.classList.toggle("hidden-gs", !entry.visible);
+      applyVisualizationStateToEntry(entry);
+    }
+
+    function addGSPanelEntry(entry) {
+      const row = document.createElement("div");
+      row.className = "gs-entry";
+
+      const label = document.createElement("span");
+      label.className = "gs-label";
+      label.textContent = entry.label;
+      label.title = entry.label;
+
+      const toggleBtn = document.createElement("button");
+      toggleBtn.className = "gs-toggle";
+      toggleBtn.textContent = "👁";
+      toggleBtn.title = "Toggle visibility";
+      toggleBtn.addEventListener("click", () => toggleGSVisibility(entry));
+
+      const removeBtn = document.createElement("button");
+      removeBtn.className = "gs-remove";
+      removeBtn.textContent = "✕";
+      removeBtn.title = "Remove";
+      removeBtn.addEventListener("click", () => removeGSEntry(entry));
+
+      row.appendChild(label);
+      row.appendChild(toggleBtn);
+      row.appendChild(removeBtn);
+      gsList.appendChild(row);
+
+      entry.domRow = row;
+      entry.domToggle = toggleBtn;
+    }
+
+    async function loadSelected() {
+      const candidate = morphCandidates.find(item => item.anchorPath === candidateSelect.value);
+      if (!candidate) {
+        alert("Please select a candidate from the dropdown.");
         return;
       }
-      const resolvedUrl = resolveLocalPath(url);
-      const response = await fetch(resolvedUrl, { cache: "no-store" });
-      if (!response.ok) {
-        throw new Error(`Failed to fetch delta offsets: ${response.status} ${response.statusText}`);
-      }
-      const buffer = await response.arrayBuffer();
-      if (buffer.byteLength % (3 * 4) !== 0) {
-        throw new Error(`Invalid delta offset buffer size: ${buffer.byteLength}`);
-      }
-      deltaOffsets = new Float32Array(buffer);
-      const expectedCount = anchorMesh.packedSplats.numSplats * 3;
-      if (deltaOffsets.length !== expectedCount) {
-        throw new Error(`Offset count mismatch! Anchor: ${anchorMesh.packedSplats.numSplats}, Delta entries: ${deltaOffsets.length / 3}`);
-      }
-      hasDelta = true;
-      logDeltaStats(resolvedUrl, deltaOffsets);
-      applyVisualizationState();
-    }
-
-    async function loadAnchorFromUrl(url) {
-      await setAnchorMesh({ url: resolveLocalPath(url) });
-    }
-
-    async function loadDeltaFromUrl(url) {
-      await setDeltaOffsets(url);
-    }
-
-    async function loadMorphPair(anchorUrl, deltaUrl) {
-      if (!anchorUrl) {
-        alert("An anchor path is required.");
+      if (loadedSplats.length >= MAX_GS) {
+        alert(`Maximum ${MAX_GS} GS already loaded. Remove one before adding more.`);
         return;
       }
 
+      const anchorUrl = resolveLocalPath(candidate.anchorPath);
+      const deltaUrl = candidate.deltaPath ? resolveLocalPath(candidate.deltaPath) : null;
+      const isPosed = candidate.variant === "posed" || isPosedAnchorPath(anchorUrl);
+
+      setCandidateStatus("Loading...");
       try {
-        await loadAnchorFromUrl(anchorUrl);
-        await loadDeltaFromUrl(deltaUrl);
-        const url = new URL(window.location);
-        url.searchParams.set("anchor", anchorUrl);
-        url.searchParams.set("delta", deltaUrl);
-        history.replaceState(null, "", url);
+        const mesh = new SplatMesh({ url: anchorUrl });
+        await mesh.initialized;
+        if (isPosed) mesh.rotation.x = Math.PI;
+        scene.add(mesh);
+
+        const originalCenters = extractCenters(mesh);
+        const { scales, opacities } = extractScalesAndOpacities(mesh);
+
+        let deltaOffsets;
+        let hasDelta = false;
+
+        if (deltaUrl) {
+          const response = await fetch(deltaUrl, { cache: "no-store" });
+          if (!response.ok) throw new Error(`Failed to fetch delta: ${response.status} ${response.statusText}`);
+          const buffer = await response.arrayBuffer();
+          if (buffer.byteLength % (3 * 4) !== 0) throw new Error(`Invalid delta buffer size: ${buffer.byteLength}`);
+          deltaOffsets = new Float32Array(buffer);
+          const expectedCount = mesh.packedSplats.numSplats * 3;
+          if (deltaOffsets.length !== expectedCount) {
+            throw new Error(`Offset count mismatch! Anchor: ${mesh.packedSplats.numSplats}, Delta: ${deltaOffsets.length / 3}`);
+          }
+          hasDelta = true;
+          logDeltaStats(deltaUrl, deltaOffsets);
+        } else {
+          deltaOffsets = new Float32Array(mesh.packedSplats.numSplats * 3);
+        }
+
+        const entry = {
+          label: candidate.label,
+          anchorMesh: mesh,
+          deltaOffsets,
+          hasDelta,
+          originalCenters,
+          originalScales: scales,
+          originalOpacities: opacities,
+          visible: true,
+          domRow: null,
+          domToggle: null,
+        };
+
+        loadedSplats.push(entry);
+        addGSPanelEntry(entry);
+        applyVisualizationStateToEntry(entry);
+        updateLoadedGsPanel();
+        updateSliderStates();
+        updateInstructionsVisibility();
+        setCandidateStatus(`${loadedSplats.length}/${MAX_GS} loaded`);
       } catch (err) {
         console.error("Failed to load morph pair:", err);
-        alert("Failed to load the anchor/delta pair. Check the paths and console output.");
+        alert("Failed to load. Check paths and console.");
+        setCandidateStatus("Load failed");
       }
     }
 
@@ -647,32 +793,21 @@
       await refreshMorphCandidates();
     });
 
-    candidateSelect.addEventListener("change", () => {
-      const candidate = morphCandidates.find((item) => item.anchorPath === candidateSelect.value);
-      if (!candidate) {
-        return;
-      }
-      applyCandidate(candidate);
-    });
-
     candidateLoadButton.addEventListener("click", async () => {
-      const candidate = morphCandidates.find((item) => item.anchorPath === candidateSelect.value);
-      if (candidate) {
-        applyCandidate(candidate);
-      }
-      await loadMorphPair(settings.anchorPath, settings.deltaPath);
+      await loadSelected();
     });
 
     await refreshMorphCandidates();
-    syncCandidateSelection();
 
     renderer.setAnimationLoop((time) => {
       const deltaTime = (time - lastFrameTime) / 1000;
       lastFrameTime = time;
       updateKeyboardPan(deltaTime);
       orbitControls.update();
-      if (settings.autoRotate && anchorMesh) {
-        anchorMesh.rotation.y += 0.01;
+      if (settings.autoRotate) {
+        for (const entry of loadedSplats) {
+          if (entry.anchorMesh) entry.anchorMesh.rotation.y += 0.01;
+        }
       }
       renderer.render(scene, camera);
     });
