@@ -26,10 +26,10 @@
       right: 10px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 0;
       align-items: stretch;
       max-width: 310px;
-      min-width: 245px;
+      min-width: 260px;
     }
     #instructions {
       position: absolute;
@@ -56,6 +56,7 @@
       backdrop-filter: blur(6px);
     }
     #scan-target-select,
+    #model-select,
     #candidate-select,
     #candidate-refresh,
     #candidate-load {
@@ -67,6 +68,10 @@
       height: 36px;
       box-sizing: border-box;
       font: inherit;
+    }
+    #model-select {
+      min-width: 140px;
+      max-width: 220px;
     }
     #candidate-select {
       min-width: 200px;
@@ -136,65 +141,105 @@
       font-size: 11px;
       margin-left: auto;
     }
-    #loaded-gs-panel {
+
+    /* Control tab panel */
+    #control-tab-panel {
       background: rgba(18, 18, 18, 0.88);
       backdrop-filter: blur(6px);
       border-radius: 10px;
-      padding: 8px 12px;
-      color: #fff;
+      overflow: hidden;
       font-size: 13px;
+      color: #fff;
     }
+    .tab-header {
+      background: rgba(36, 36, 36, 0.95);
+      padding: 7px 12px;
+      font-size: 10px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #999;
+      border-bottom: 1px solid #2a2a2a;
+      user-select: none;
+    }
+    .tab-body {
+      padding: 8px 10px 10px;
+    }
+    .global-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #2a2a2a;
+      margin-bottom: 8px;
+    }
+    .global-controls label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      font-size: 12px;
+      color: #ccc;
+      user-select: none;
+    }
+    .global-controls input[type="checkbox"] {
+      accent-color: #888;
+      cursor: pointer;
+    }
+    .global-controls input[type="color"] {
+      width: 28px;
+      height: 24px;
+      border: 1px solid #444;
+      border-radius: 4px;
+      background: none;
+      cursor: pointer;
+      padding: 1px;
+      vertical-align: middle;
+    }
+    .small-btn {
+      background: #1e1e1e;
+      border: 1px solid #444;
+      color: #ccc;
+      border-radius: 4px;
+      padding: 3px 8px;
+      cursor: pointer;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .small-btn:hover { background: #333; }
+
+    /* GS list */
     #gs-empty {
       color: #555;
       font-size: 12px;
       padding: 4px 2px;
       font-style: italic;
     }
-    #loaded-gs-panel .gs-header {
-      font-weight: bold;
-      margin-bottom: 6px;
-      color: #888;
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
     .gs-entry {
+      border-bottom: 1px solid #222;
+      padding: 6px 0 8px;
+    }
+    .gs-entry:last-child { border-bottom: none; }
+    .gs-title-row {
       display: flex;
       align-items: center;
-      gap: 6px;
-      padding: 4px 0;
-      border-bottom: 1px solid #2a2a2a;
+      gap: 5px;
+      margin-bottom: 5px;
     }
-    .gs-entry:last-child {
-      border-bottom: none;
-    }
-    .gs-label {
+    .gs-name {
       flex: 1;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       font-size: 12px;
-      color: #ddd;
+      color: #e0e0e0;
+      font-weight: 500;
     }
     .gs-toggle {
       background: #1e1e1e;
       border: 1px solid #444;
       color: #eee;
-      border-radius: 4px;
-      padding: 2px 7px;
-      cursor: pointer;
-      font-size: 11px;
-      flex-shrink: 0;
-      line-height: 1.4;
-    }
-    .gs-toggle.hidden-gs {
-      color: #555;
-      border-color: #333;
-    }
-    .gs-remove {
-      background: #1e1e1e;
-      border: 1px solid #444;
-      color: #c55;
       border-radius: 4px;
       padding: 2px 6px;
       cursor: pointer;
@@ -202,8 +247,43 @@
       flex-shrink: 0;
       line-height: 1.4;
     }
-    .gs-remove:hover {
-      background: #3a1515;
+    .gs-toggle.hidden-gs { color: #555; border-color: #333; }
+    .gs-remove {
+      background: #1e1e1e;
+      border: 1px solid #444;
+      color: #c55;
+      border-radius: 4px;
+      padding: 2px 5px;
+      cursor: pointer;
+      font-size: 11px;
+      flex-shrink: 0;
+      line-height: 1.4;
+    }
+    .gs-remove:hover { background: #3a1515; }
+    .gs-slider-row {
+      display: grid;
+      grid-template-columns: 58px 1fr 36px;
+      align-items: center;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .gs-slider-label {
+      font-size: 11px;
+      color: #888;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .gs-slider {
+      width: 100%;
+      accent-color: #666;
+      cursor: pointer;
+    }
+    .gs-slider:disabled { opacity: 0.3; cursor: default; }
+    .gs-slider-val {
+      font-size: 10px;
+      color: #777;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
     }
   </style>
 </head>
@@ -215,6 +295,9 @@
       <option value="expr">expr (excl. visualize)</option>
       <option value="expr-visualize">expr/visualize</option>
     </select>
+    <select id="model-select">
+      <option value="">All Models</option>
+    </select>
     <div id="filter-wrapper">
       <button id="filter-btn" type="button">Filter ▾</button>
       <div id="filter-panel">
@@ -222,6 +305,7 @@
         <label class="filter-label"><input type="checkbox" id="filter-image-gs" checked> Image GS <span class="filter-count" id="count-image-gs"></span></label>
         <label class="filter-label"><input type="checkbox" id="filter-canonical" checked> Canonical <span class="filter-count" id="count-canonical"></span></label>
         <label class="filter-label"><input type="checkbox" id="filter-posed" checked> Posed <span class="filter-count" id="count-posed"></span></label>
+        <label class="filter-label"><input type="checkbox" id="filter-dbg-step"> Dbg Step <span class="filter-count" id="count-dbg-step"></span></label>
       </div>
     </div>
     <select id="candidate-select">
@@ -232,11 +316,24 @@
     <span id="candidate-status"></span>
   </div>
   <div id="right-panel">
-    <div id="gui-container"></div>
-    <div id="loaded-gs-panel">
-      <div class="gs-header">Loaded GS (max 5)</div>
-      <div id="gs-list">
-        <div id="gs-empty">No GS loaded</div>
+    <div id="control-tab-panel">
+      <div class="tab-header">Controls</div>
+      <div class="tab-body">
+        <div class="global-controls">
+          <label>
+            <input type="checkbox" id="auto-rotate-chk">
+            Auto Rotate
+          </label>
+          <label title="Background color">
+            Bg
+            <input type="color" id="bg-color-input" value="#000000">
+          </label>
+          <button id="reset-camera-btn" class="small-btn">↺ Reset</button>
+          <button id="render-btn" class="small-btn">⬇ Render</button>
+        </div>
+        <div id="gs-list">
+          <div id="gs-empty">No GS loaded</div>
+        </div>
       </div>
     </div>
   </div>
@@ -252,8 +349,7 @@
       "imports": {
         "three": "/examples/js/vendor/three/build/three.module.js",
         "three/addons/": "/examples/js/vendor/three/examples/jsm/",
-        "@sparkjsdev/spark": "/dist/spark.module.js",
-        "lil-gui": "/examples/js/vendor/lil-gui/dist/lil-gui.esm.js"
+        "@sparkjsdev/spark": "/dist/spark.module.js"
       }
     }
   </script>
@@ -261,7 +357,6 @@
   <script type="module">
     import * as THREE from "three";
     import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-    import { GUI } from "lil-gui";
     import {
       SparkRenderer,
       SplatMesh,
@@ -281,11 +376,11 @@
 
     const canvas = document.getElementById("canvas");
     const scanTargetSelect = document.getElementById("scan-target-select");
+    const modelSelect = document.getElementById("model-select");
     const candidateSelect = document.getElementById("candidate-select");
     const candidateRefreshButton = document.getElementById("candidate-refresh");
     const candidateLoadButton = document.getElementById("candidate-load");
     const candidateStatus = document.getElementById("candidate-status");
-    const loadedGsPanel = document.getElementById("loaded-gs-panel");
     const gsList = document.getElementById("gs-list");
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -312,6 +407,8 @@
     const panUp = new THREE.Vector3();
     const panDelta = new THREE.Vector3();
     const cameraDirection = new THREE.Vector3();
+    const rollForward = new THREE.Vector3();
+    const rollQuat = new THREE.Quaternion();
     let lastFrameTime = performance.now();
 
     document.addEventListener("keydown", (event) => { pressedKeys.add(event.code); });
@@ -341,8 +438,71 @@
       orbitControls.target.add(panDelta);
     }
 
-    const gui = new GUI({ container: document.getElementById("gui-container") });
-    let morphCandidates = [];
+    function updateKeyboardRoll(deltaTime) {
+      const rollDir = pressedKeys.has("KeyR") ? 1 : pressedKeys.has("KeyF") ? -1 : 0;
+      if (rollDir === 0) return;
+
+      const rollSpeed = 1.2 * deltaTime;
+      camera.getWorldDirection(rollForward);
+      rollQuat.setFromAxisAngle(rollForward, rollDir * rollSpeed);
+      camera.up.applyQuaternion(rollQuat).normalize();
+      orbitControls.update();
+    }
+
+    // --- Global controls ---
+    const autoRotateChk = document.getElementById("auto-rotate-chk");
+    const bgColorInput = document.getElementById("bg-color-input");
+
+    bgColorInput.addEventListener("input", (e) => {
+      scene.background.set(e.target.value);
+    });
+
+    document.getElementById("reset-camera-btn").addEventListener("click", () => {
+      camera.position.set(0, 0, 2);
+      orbitControls.target.set(0, 0, 0);
+      orbitControls.update();
+    });
+
+    document.getElementById("render-btn").addEventListener("click", () => {
+      const RENDER_SIZE = 1024;
+
+      const savedRendererSize = new THREE.Vector2();
+      renderer.getSize(savedRendererSize);
+      const savedAspect = camera.aspect;
+      const savedBackground = scene.background;
+      const savedClearColor = renderer.getClearColor(new THREE.Color());
+      const savedClearAlpha = renderer.getClearAlpha();
+
+      // Pause animation loop so nothing overwrites the canvas before blob capture
+      renderer.setAnimationLoop(null);
+
+      renderer.setSize(RENDER_SIZE, RENDER_SIZE, false);
+      camera.aspect = 1.0;
+      camera.updateProjectionMatrix();
+      scene.background = null;
+      renderer.setClearColor(0x000000, 0);
+      renderer.render(scene, camera);
+
+      canvas.toBlob((blob) => {
+        renderer.setSize(savedRendererSize.x, savedRendererSize.y, false);
+        camera.aspect = savedAspect;
+        camera.updateProjectionMatrix();
+        scene.background = savedBackground;
+        renderer.setClearColor(savedClearColor, savedClearAlpha);
+        renderer.setAnimationLoop(animateFrame);
+
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "render.png";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+      }, "image/png");
+    });
 
     // --- Filter dropdown ---
     const filterBtn = document.getElementById("filter-btn");
@@ -351,6 +511,7 @@
     const filterImageGs = document.getElementById("filter-image-gs");
     const filterCanonical = document.getElementById("filter-canonical");
     const filterPosed = document.getElementById("filter-posed");
+    const filterDbgStep = document.getElementById("filter-dbg-step");
 
     filterBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -362,17 +523,49 @@
       }
     });
 
-    function variantMatchesFilter(variant) {
-      if (variant === "fac") return filterFac.checked;
-      if (variant === "image_gs") return filterImageGs.checked;
-      if (variant === "canonical") return filterCanonical.checked;
-      if (variant === "posed" || variant === "posed_gs") return filterPosed.checked;
+    let morphCandidates = [];
+    let currentScanTarget = "expr";
+
+    function getModelGroup(candidate) {
+      const parts = (candidate.vizDir || "").split("/");
+      // "expr" mode:           vizDir = "expr/model/..."  → index 1
+      // "expr-visualize" mode: vizDir = "expr/visualize/model/..." → index 2
+      const idx = currentScanTarget === "expr-visualize" ? 2 : 1;
+      return parts[idx] || "(root)";
+    }
+
+    function populateModelSelect() {
+      const groups = [...new Set(morphCandidates.map(c => getModelGroup(c)))].sort();
+      const prevValue = modelSelect.value;
+      modelSelect.innerHTML = "";
+      const allOpt = document.createElement("option");
+      allOpt.value = "";
+      allOpt.textContent = groups.length > 0 ? "All Models" : "No Models";
+      modelSelect.appendChild(allOpt);
+      for (const g of groups) {
+        const opt = document.createElement("option");
+        opt.value = g;
+        opt.textContent = g;
+        modelSelect.appendChild(opt);
+      }
+      if (groups.includes(prevValue)) {
+        modelSelect.value = prevValue;
+      }
+    }
+
+    function candidateMatchesFilter(candidate) {
+      if (candidate.isDebugStep && !filterDbgStep.checked) return false;
+      if (candidate.variant === "fac") return filterFac.checked;
+      if (candidate.variant === "image_gs") return filterImageGs.checked;
+      if (candidate.variant === "canonical") return filterCanonical.checked;
+      if (candidate.variant === "posed" || candidate.variant === "posed_gs") return filterPosed.checked;
       return true;
     }
 
     function updateFilterCounts() {
-      const counts = { fac: 0, image_gs: 0, canonical: 0, posed: 0 };
+      const counts = { fac: 0, image_gs: 0, canonical: 0, posed: 0, dbgStep: 0 };
       for (const c of morphCandidates) {
+        if (c.isDebugStep) counts.dbgStep++;
         if (c.variant === "fac") counts.fac++;
         else if (c.variant === "image_gs") counts.image_gs++;
         else if (c.variant === "canonical") counts.canonical++;
@@ -382,123 +575,44 @@
       document.getElementById("count-image-gs").textContent = counts.image_gs ? `(${counts.image_gs})` : "";
       document.getElementById("count-canonical").textContent = counts.canonical ? `(${counts.canonical})` : "";
       document.getElementById("count-posed").textContent = counts.posed ? `(${counts.posed})` : "";
+      document.getElementById("count-dbg-step").textContent = counts.dbgStep ? `(${counts.dbgStep})` : "";
     }
 
     function rebuildCandidateSelect() {
-      const filtered = morphCandidates.filter(c => variantMatchesFilter(c.variant));
+      const selectedModel = modelSelect.value;
+      const filtered = morphCandidates.filter(c =>
+        candidateMatchesFilter(c) &&
+        (selectedModel === "" || getModelGroup(c) === selectedModel)
+      );
       candidateSelect.innerHTML = "";
       const placeholder = document.createElement("option");
       placeholder.value = "";
-      placeholder.textContent = filtered.length > 0 ? "Select expr candidate" : "No candidates match filter";
+      placeholder.textContent = filtered.length > 0 ? "Select candidate" : "No candidates match filter";
       candidateSelect.appendChild(placeholder);
       for (const candidate of filtered) {
         const option = document.createElement("option");
         option.value = candidate.anchorPath;
-        option.textContent = candidate.label;
+        // When a model is selected, shorten label by dropping the model prefix
+        let shortLabel;
+        if (selectedModel) {
+          const parts = (candidate.vizDir || "").split("/");
+          const groupIdx = currentScanTarget === "expr-visualize" ? 2 : 1;
+          const subPath = parts.slice(groupIdx + 1).join("/");
+          const prefix = subPath ? `${subPath} :: ` : "";
+          shortLabel = `${prefix}${candidate.step} :: ${candidate.variant}${candidate.deltaPath ? "" : " (no delta)"}`;
+        } else {
+          shortLabel = candidate.label;
+        }
+        option.textContent = shortLabel;
         candidateSelect.appendChild(option);
       }
     }
 
-    [filterFac, filterImageGs, filterCanonical, filterPosed].forEach(cb => {
+    [filterFac, filterImageGs, filterCanonical, filterPosed, filterDbgStep].forEach(cb => {
       cb.addEventListener("change", rebuildCandidateSelect);
     });
 
-    const settings = {
-      alpha: 0,
-      scaleMultiplier: 1,
-      opacityMultiplier: 1,
-      autoRotate: false,
-      backgroundColor: "#000000",
-      resetCamera: () => {
-        camera.position.set(0, 0, 2);
-        orbitControls.target.set(0, 0, 0);
-        orbitControls.update();
-      },
-      renderToImage: () => {
-        const RENDER_SIZE = 1024;
-
-        const savedRendererSize = new THREE.Vector2();
-        renderer.getSize(savedRendererSize);
-        const savedAspect = camera.aspect;
-        const savedBackground = scene.background;
-        const savedClearColor = renderer.getClearColor(new THREE.Color());
-        const savedClearAlpha = renderer.getClearAlpha();
-
-        const cs = canvas.style;
-        const savedStyle = {
-          position: cs.position, width: cs.width, height: cs.height,
-          left: cs.left, top: cs.top, transform: cs.transform, zIndex: cs.zIndex,
-        };
-
-        cs.position = "fixed";
-        cs.width = `${RENDER_SIZE}px`;
-        cs.height = `${RENDER_SIZE}px`;
-        cs.left = "50%";
-        cs.top = "50%";
-        cs.transform = "translate(-50%, -50%)";
-        cs.zIndex = "100";
-        renderer.setSize(RENDER_SIZE, RENDER_SIZE, false);
-        camera.aspect = 1.0;
-        camera.updateProjectionMatrix();
-
-        const renderTarget = new THREE.WebGLRenderTarget(RENDER_SIZE, RENDER_SIZE, {
-          format: THREE.RGBAFormat,
-          type: THREE.UnsignedByteType,
-        });
-        scene.background = null;
-        renderer.setClearColor(0x000000, 0);
-        renderer.setRenderTarget(renderTarget);
-        renderer.render(scene, camera);
-        renderer.setRenderTarget(null);
-
-        const pixels = new Uint8Array(RENDER_SIZE * RENDER_SIZE * 4);
-        renderer.readRenderTargetPixels(renderTarget, 0, 0, RENDER_SIZE, RENDER_SIZE, pixels);
-        renderTarget.dispose();
-        const flipped = new Uint8Array(RENDER_SIZE * RENDER_SIZE * 4);
-        for (let y = 0; y < RENDER_SIZE; y++) {
-          const srcRow = (RENDER_SIZE - 1 - y) * RENDER_SIZE * 4;
-          flipped.set(pixels.subarray(srcRow, srcRow + RENDER_SIZE * 4), y * RENDER_SIZE * 4);
-        }
-
-        cs.position = savedStyle.position;
-        cs.width = savedStyle.width;
-        cs.height = savedStyle.height;
-        cs.left = savedStyle.left;
-        cs.top = savedStyle.top;
-        cs.transform = savedStyle.transform;
-        cs.zIndex = savedStyle.zIndex;
-        scene.background = savedBackground;
-        renderer.setClearColor(savedClearColor, savedClearAlpha);
-        renderer.setSize(savedRendererSize.x, savedRendererSize.y, false);
-        camera.aspect = savedAspect;
-        camera.updateProjectionMatrix();
-
-        const offscreenCanvas = document.createElement("canvas");
-        offscreenCanvas.width = RENDER_SIZE;
-        offscreenCanvas.height = RENDER_SIZE;
-        offscreenCanvas.getContext("2d").putImageData(
-          new ImageData(new Uint8ClampedArray(flipped.buffer), RENDER_SIZE, RENDER_SIZE), 0, 0
-        );
-        offscreenCanvas.toBlob((blob) => {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = "render.png";
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        }, "image/png");
-      },
-    };
-
-    const alphaController = gui.add(settings, "alpha", 0, 1, 0.01).name("Position Morph").disable();
-    const scaleController = gui.add(settings, "scaleMultiplier", 0, 1, 0.01).name("Scale").disable();
-    const opacityController = gui.add(settings, "opacityMultiplier", 0, 1, 0.01).name("Opacity").disable();
-    gui.add(settings, "autoRotate").name("Auto Rotate");
-    gui.addColor(settings, "backgroundColor").name("Background").onChange(v => scene.background.set(v));
-    gui.add(settings, "resetCamera").name("Reset Camera");
-    gui.add(settings, "renderToImage").name("Render");
+    modelSelect.addEventListener("change", rebuildCandidateSelect);
 
     // --- Loaded GS state ---
     const loadedSplats = [];
@@ -523,6 +637,7 @@
     function populateCandidateSelect(candidates) {
       morphCandidates = candidates;
       updateFilterCounts();
+      populateModelSelect();
       rebuildCandidateSelect();
     }
 
@@ -530,6 +645,7 @@
       setCandidateStatus("Scanning...");
       try {
         const scanTarget = scanTargetSelect.value || "expr";
+        currentScanTarget = scanTarget;
         const response = await fetch(`${MORPH_CANDIDATES_URL}?scanTarget=${encodeURIComponent(scanTarget)}`, { cache: "no-store" });
         if (!response.ok) {
           throw new Error(`Failed to fetch candidates: ${response.status} ${response.statusText}`);
@@ -545,36 +661,17 @@
       }
     }
 
-    function updateSliderStates() {
-      const anyLoaded = loadedSplats.length > 0;
-      const anyDelta = loadedSplats.some(e => e.hasDelta);
-      if (anyLoaded) {
-        scaleController.enable();
-        opacityController.enable();
-      } else {
-        scaleController.disable();
-        opacityController.disable();
-      }
-      if (anyDelta) {
-        alphaController.enable();
-      } else {
-        alphaController.disable();
-      }
-    }
-
     function updateInstructionsVisibility() {
-      const instructions = document.getElementById("instructions");
-      instructions.style.display = loadedSplats.length > 0 ? "none" : "";
+      document.getElementById("instructions").style.display = loadedSplats.length > 0 ? "none" : "";
     }
 
-    function updateLoadedGsPanel() {
+    function updateEmptyLabel() {
       const empty = document.getElementById("gs-empty");
       if (empty) empty.style.display = loadedSplats.length > 0 ? "none" : "";
     }
 
     function isPosedAnchorPath(pathValue) {
-      const pathWithoutQuery = (pathValue || "").split("?")[0];
-      return pathWithoutQuery.endsWith("_posed.ply");
+      return (pathValue || "").split("?")[0].endsWith("_posed.ply");
     }
 
     function extractCenters(splatMesh) {
@@ -609,9 +706,9 @@
       if (!entry.anchorMesh || !entry.deltaOffsets || !entry.originalCenters) return;
       const packed = entry.anchorMesh.packedSplats.packedArray;
       const numSplats = entry.anchorMesh.packedSplats.numSplats;
-      const alpha = settings.alpha;
-      const scaleMultiplier = settings.scaleMultiplier;
-      const opacityMultiplier = entry.visible ? settings.opacityMultiplier : 0;
+      const alpha = entry.alpha;
+      const scaleMultiplier = entry.scaleMultiplier;
+      const opacityMultiplier = entry.visible ? entry.opacityMultiplier : 0;
       for (let i = 0; i < numSplats; i++) {
         const baseOffset = i * 3;
         setPackedSplatCenter(
@@ -631,17 +728,8 @@
       }
       entry.anchorMesh.packedSplats.needsUpdate = true;
       entry.anchorMesh.updateVersion();
+      entry.anchorMesh.rotation.y = entry.rotationY;
     }
-
-    function applyVisualizationState() {
-      for (const entry of loadedSplats) {
-        applyVisualizationStateToEntry(entry);
-      }
-    }
-
-    alphaController.onChange(() => applyVisualizationState());
-    scaleController.onChange(() => applyVisualizationState());
-    opacityController.onChange(() => applyVisualizationState());
 
     function logDeltaStats(url, offsets) {
       if (!offsets || offsets.length === 0) {
@@ -671,8 +759,7 @@
       loadedSplats.splice(idx, 1);
       if (entry.anchorMesh) scene.remove(entry.anchorMesh);
       if (entry.domRow) entry.domRow.remove();
-      updateLoadedGsPanel();
-      updateSliderStates();
+      updateEmptyLabel();
       updateInstructionsVisibility();
       setCandidateStatus(`${loadedSplats.length}/${MAX_GS} loaded`);
     }
@@ -684,14 +771,50 @@
       applyVisualizationStateToEntry(entry);
     }
 
-    function addGSPanelEntry(entry) {
+    function makeSliderRow(labelText, min, max, step, initialValue, disabled, onChange) {
       const row = document.createElement("div");
-      row.className = "gs-entry";
+      row.className = "gs-slider-row";
 
       const label = document.createElement("span");
-      label.className = "gs-label";
-      label.textContent = entry.label;
-      label.title = entry.label;
+      label.className = "gs-slider-label";
+      label.textContent = labelText;
+
+      const slider = document.createElement("input");
+      slider.type = "range";
+      slider.className = "gs-slider";
+      slider.min = min;
+      slider.max = max;
+      slider.step = step;
+      slider.value = initialValue;
+      if (disabled) slider.disabled = true;
+
+      const valDisplay = document.createElement("span");
+      valDisplay.className = "gs-slider-val";
+      valDisplay.textContent = Number(initialValue).toFixed(2);
+
+      slider.addEventListener("input", () => {
+        valDisplay.textContent = Number(slider.value).toFixed(2);
+        onChange(Number(slider.value));
+      });
+
+      row.appendChild(label);
+      row.appendChild(slider);
+      row.appendChild(valDisplay);
+      return { row, slider, valDisplay };
+    }
+
+    function addGSPanelEntry(entry) {
+      const container = document.createElement("div");
+      container.className = "gs-entry";
+
+      // Title row: name + visible toggle + delete
+      const titleRow = document.createElement("div");
+      titleRow.className = "gs-title-row";
+
+      const nameEl = document.createElement("span");
+      nameEl.className = "gs-name";
+      nameEl.textContent = entry.label;
+      nameEl.title = entry.label;
 
       const toggleBtn = document.createElement("button");
       toggleBtn.className = "gs-toggle";
@@ -705,12 +828,34 @@
       removeBtn.title = "Remove";
       removeBtn.addEventListener("click", () => removeGSEntry(entry));
 
-      row.appendChild(label);
-      row.appendChild(toggleBtn);
-      row.appendChild(removeBtn);
-      gsList.appendChild(row);
+      titleRow.appendChild(nameEl);
+      titleRow.appendChild(toggleBtn);
+      titleRow.appendChild(removeBtn);
+      container.appendChild(titleRow);
 
-      entry.domRow = row;
+      // Per-GS sliders
+      const { row: posRow, slider: posSlider } = makeSliderRow(
+        "Position", 0, 1, 0.01, entry.alpha, !entry.hasDelta,
+        (v) => { entry.alpha = v; applyVisualizationStateToEntry(entry); }
+      );
+
+      const { row: scaleRow } = makeSliderRow(
+        "Scale", 0, 2, 0.01, entry.scaleMultiplier, false,
+        (v) => { entry.scaleMultiplier = v; applyVisualizationStateToEntry(entry); }
+      );
+
+      const { row: rotRow } = makeSliderRow(
+        "Opacity", 0, 1, 0.01, entry.opacityMultiplier, false,
+        (v) => { entry.opacityMultiplier = v; applyVisualizationStateToEntry(entry); }
+      );
+
+      container.appendChild(posRow);
+      container.appendChild(scaleRow);
+      container.appendChild(rotRow);
+
+      gsList.appendChild(container);
+
+      entry.domRow = container;
       entry.domToggle = toggleBtn;
     }
 
@@ -767,6 +912,10 @@
           originalScales: scales,
           originalOpacities: opacities,
           visible: true,
+          alpha: 0,
+          scaleMultiplier: 1,
+          opacityMultiplier: 1,
+          rotationY: isPosed ? Math.PI : 0,
           domRow: null,
           domToggle: null,
         };
@@ -774,8 +923,7 @@
         loadedSplats.push(entry);
         addGSPanelEntry(entry);
         applyVisualizationStateToEntry(entry);
-        updateLoadedGsPanel();
-        updateSliderStates();
+        updateEmptyLabel();
         updateInstructionsVisibility();
         setCandidateStatus(`${loadedSplats.length}/${MAX_GS} loaded`);
       } catch (err) {
@@ -799,18 +947,24 @@
 
     await refreshMorphCandidates();
 
-    renderer.setAnimationLoop((time) => {
+    function animateFrame(time) {
       const deltaTime = (time - lastFrameTime) / 1000;
       lastFrameTime = time;
       updateKeyboardPan(deltaTime);
+      updateKeyboardRoll(deltaTime);
       orbitControls.update();
-      if (settings.autoRotate) {
+      if (autoRotateChk.checked) {
         for (const entry of loadedSplats) {
-          if (entry.anchorMesh) entry.anchorMesh.rotation.y += 0.01;
+          if (entry.anchorMesh) {
+            entry.rotationY += 0.01;
+            entry.anchorMesh.rotation.y = entry.rotationY;
+          }
         }
       }
       renderer.render(scene, camera);
-    });
+    }
+
+    renderer.setAnimationLoop(animateFrame);
   </script>
 </body>
 </html>

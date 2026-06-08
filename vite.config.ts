@@ -10,6 +10,7 @@ type MorphCandidate = {
   anchorPath: string;
   deltaPath: string;
   fileName: string;
+  isDebugStep: boolean;
   label: string;
   modelName: string;
   step: string;
@@ -37,20 +38,10 @@ function listSam3dgsMorphCandidates(fsRoot: string, scanTarget: "expr" | "expr-v
       variant: "posed",
     },
     {
-      anchorSuffix: "_fac_gs.ply",
+      anchorSuffix: "_gs.ply",
       deltaSuffixes: [],
-      variant: "fac",
-    },
-    {
-      anchorSuffix: "_posed_gs.ply",
-      deltaSuffixes: [],
-      variant: "posed_gs",
-    },
-    {
-      anchorSuffix: "_image_gs.ply",
-      deltaSuffixes: [],
-      variant: "image_gs",
-    },
+      variant: "gs",
+    }
   ];
 
   function scanDirectoryForPairs(targetDir: string) {
@@ -93,10 +84,12 @@ function listSam3dgsMorphCandidates(fsRoot: string, scanTarget: "expr" | "expr-v
       seen.add(candidateKey);
 
       const modelDir = path.basename(path.dirname(relAnchorPath));
+      const isDebugStep = modelDir.startsWith("dbg_step") || relDir.includes("/dbg_step");
       candidates.push({
         anchorPath: relAnchorPath,
         deltaPath: relDeltaPath,
         fileName: entry.name,
+        isDebugStep,
         label: `${modelDir || "."} :: ${step} :: ${pairSpec.variant}${hasDelta ? "" : " (no delta)"}`,
         modelName: modelDir || ".",
         step,
