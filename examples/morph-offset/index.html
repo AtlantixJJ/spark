@@ -303,6 +303,7 @@
       <div id="filter-panel">
         <label class="filter-label"><input type="checkbox" id="filter-fac" checked> FAC GS <span class="filter-count" id="count-fac"></span></label>
         <label class="filter-label"><input type="checkbox" id="filter-image-gs" checked> Image GS <span class="filter-count" id="count-image-gs"></span></label>
+        <label class="filter-label"><input type="checkbox" id="filter-token-canonical-gs" checked> Token Canonical GS <span class="filter-count" id="count-token-canonical-gs"></span></label>
         <label class="filter-label"><input type="checkbox" id="filter-canonical" checked> Canonical <span class="filter-count" id="count-canonical"></span></label>
         <label class="filter-label"><input type="checkbox" id="filter-posed" checked> Posed <span class="filter-count" id="count-posed"></span></label>
         <label class="filter-label"><input type="checkbox" id="filter-dbg-step"> Dbg Step <span class="filter-count" id="count-dbg-step"></span></label>
@@ -366,6 +367,7 @@
       unpackSplat,
     } from "@sparkjsdev/spark";
 
+    const MORPH_MODELS_URL = "/sam3dgs/morph-models";
     const MORPH_CANDIDATES_URL = "/sam3dgs/morph-candidates";
     const MAX_GS = 5;
 
@@ -509,6 +511,7 @@
     const filterPanel = document.getElementById("filter-panel");
     const filterFac = document.getElementById("filter-fac");
     const filterImageGs = document.getElementById("filter-image-gs");
+    const filterTokenCanonicalGs = document.getElementById("filter-token-canonical-gs");
     const filterCanonical = document.getElementById("filter-canonical");
     const filterPosed = document.getElementById("filter-posed");
     const filterDbgStep = document.getElementById("filter-dbg-step");
@@ -526,30 +529,23 @@
     let morphCandidates = [];
     let currentScanTarget = "expr";
 
-    function getModelGroup(candidate) {
-      const parts = (candidate.vizDir || "").split("/");
-      // "expr" mode:           vizDir = "expr/model/..."  → index 1
-      // "expr-visualize" mode: vizDir = "expr/visualize/model/..." → index 2
-      const idx = currentScanTarget === "expr-visualize" ? 2 : 1;
-      return parts[idx] || "(root)";
-    }
-
-    function populateModelSelect() {
-      const groups = [...new Set(morphCandidates.map(c => getModelGroup(c)))].sort();
+    function populateModelSelect(models) {
       const prevValue = modelSelect.value;
       modelSelect.innerHTML = "";
-      const allOpt = document.createElement("option");
-      allOpt.value = "";
-      allOpt.textContent = groups.length > 0 ? "All Models" : "No Models";
-      modelSelect.appendChild(allOpt);
-      for (const g of groups) {
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = models.length > 0 ? "Select a model" : "No models found";
+      modelSelect.appendChild(placeholder);
+      for (const m of models) {
         const opt = document.createElement("option");
-        opt.value = g;
-        opt.textContent = g;
+        opt.value = m;
+        opt.textContent = m;
         modelSelect.appendChild(opt);
       }
-      if (groups.includes(prevValue)) {
+      if (models.includes(prevValue)) {
         modelSelect.value = prevValue;
+      } else {
+        modelSelect.value = "";
       }
     }
 
@@ -557,62 +553,78 @@
       if (candidate.isDebugStep && !filterDbgStep.checked) return false;
       if (candidate.variant === "fac") return filterFac.checked;
       if (candidate.variant === "image_gs") return filterImageGs.checked;
+      if (candidate.variant === "token_canonical_gs") return filterTokenCanonicalGs.checked;
       if (candidate.variant === "canonical") return filterCanonical.checked;
       if (candidate.variant === "posed" || candidate.variant === "posed_gs") return filterPosed.checked;
       return true;
     }
 
     function updateFilterCounts() {
-      const counts = { fac: 0, image_gs: 0, canonical: 0, posed: 0, dbgStep: 0 };
+      const counts = { fac: 0, image_gs: 0, token_canonical_gs: 0, canonical: 0, posed: 0, dbgStep: 0 };
       for (const c of morphCandidates) {
         if (c.isDebugStep) counts.dbgStep++;
         if (c.variant === "fac") counts.fac++;
         else if (c.variant === "image_gs") counts.image_gs++;
+        else if (c.variant === "token_canonical_gs") counts.token_canonical_gs++;
         else if (c.variant === "canonical") counts.canonical++;
         else if (c.variant === "posed" || c.variant === "posed_gs") counts.posed++;
       }
       document.getElementById("count-fac").textContent = counts.fac ? `(${counts.fac})` : "";
       document.getElementById("count-image-gs").textContent = counts.image_gs ? `(${counts.image_gs})` : "";
+      document.getElementById("count-token-canonical-gs").textContent = counts.token_canonical_gs ? `(${counts.token_canonical_gs})` : "";
       document.getElementById("count-canonical").textContent = counts.canonical ? `(${counts.canonical})` : "";
       document.getElementById("count-posed").textContent = counts.posed ? `(${counts.posed})` : "";
       document.getElementById("count-dbg-step").textContent = counts.dbgStep ? `(${counts.dbgStep})` : "";
     }
 
     function rebuildCandidateSelect() {
-      const selectedModel = modelSelect.value;
-      const filtered = morphCandidates.filter(c =>
-        candidateMatchesFilter(c) &&
-        (selectedModel === "" || getModelGroup(c) === selectedModel)
-      );
+      const filtered = morphCandidates.filter(candidateMatchesFilter);
       candidateSelect.innerHTML = "";
       const placeholder = document.createElement("option");
       placeholder.value = "";
-      placeholder.textContent = filtered.length > 0 ? "Select candidate" : "No candidates match filter";
+      if (!modelSelect.value) {
+        placeholder.textContent = "Select a model first";
+      } else {
+        placeholder.textContent = filtered.length > 0 ? "Select candidate" : "No candidates match filter";
+      }
       candidateSelect.appendChild(placeholder);
       for (const candidate of filtered) {
         const option = document.createElement("option");
         option.value = candidate.anchorPath;
-        // When a model is selected, shorten label by dropping the model prefix
         let shortLabel;
-        if (selectedModel) {
+        if (currentScanTarget === "expr-visualize") {
+          // Show dataset/subject/filename path jointly
           const parts = (candidate.vizDir || "").split("/");
-          const groupIdx = currentScanTarget === "expr-visualize" ? 2 : 1;
-          const subPath = parts.slice(groupIdx + 1).join("/");
+          const subPath = parts.slice(3).join("/"); // DATASET/SUBJECT (model dir is parts[2], already selected)
+          const filenameStem = candidate.fileName.replace(/\.ply$/i, "");
+          shortLabel = subPath ? `${subPath}/${filenameStem}` : filenameStem;
+        } else {
+          // Show sub-path within model dir :: step :: variant
+          const parts = (candidate.vizDir || "").split("/");
+          const subPath = parts.slice(2).join("/");
           const prefix = subPath ? `${subPath} :: ` : "";
           shortLabel = `${prefix}${candidate.step} :: ${candidate.variant}${candidate.deltaPath ? "" : " (no delta)"}`;
-        } else {
-          shortLabel = candidate.label;
         }
         option.textContent = shortLabel;
         candidateSelect.appendChild(option);
       }
     }
 
-    [filterFac, filterImageGs, filterCanonical, filterPosed, filterDbgStep].forEach(cb => {
+    [filterFac, filterImageGs, filterTokenCanonicalGs, filterCanonical, filterPosed, filterDbgStep].forEach(cb => {
       cb.addEventListener("change", rebuildCandidateSelect);
     });
 
-    modelSelect.addEventListener("change", rebuildCandidateSelect);
+    modelSelect.addEventListener("change", async () => {
+      const selectedModel = modelSelect.value;
+      if (!selectedModel) {
+        morphCandidates = [];
+        updateFilterCounts();
+        rebuildCandidateSelect();
+        setCandidateStatus("");
+        return;
+      }
+      await refreshCandidatesForModel(selectedModel);
+    });
 
     // --- Loaded GS state ---
     const loadedSplats = [];
@@ -634,29 +646,51 @@
       return `/local/${pathValue.replace(/^\.?\//, "")}`;
     }
 
-    function populateCandidateSelect(candidates) {
-      morphCandidates = candidates;
-      updateFilterCounts();
-      populateModelSelect();
-      rebuildCandidateSelect();
-    }
-
-    async function refreshMorphCandidates() {
-      setCandidateStatus("Scanning...");
+    async function refreshModels() {
+      setCandidateStatus("Loading models...");
       try {
         const scanTarget = scanTargetSelect.value || "expr";
         currentScanTarget = scanTarget;
-        const response = await fetch(`${MORPH_CANDIDATES_URL}?scanTarget=${encodeURIComponent(scanTarget)}`, { cache: "no-store" });
-        if (!response.ok) {
-          throw new Error(`Failed to fetch candidates: ${response.status} ${response.statusText}`);
-        }
+        const response = await fetch(`${MORPH_MODELS_URL}?scanTarget=${encodeURIComponent(scanTarget)}`, { cache: "no-store" });
+        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+        const payload = await response.json();
+        const models = Array.isArray(payload.models) ? payload.models : [];
+        populateModelSelect(models);
+        // Clear candidates since model selection was reset
+        morphCandidates = [];
+        updateFilterCounts();
+        rebuildCandidateSelect();
+        setCandidateStatus(models.length > 0 ? `${models.length} model(s)` : "No models found");
+      } catch (err) {
+        console.error("Failed to refresh models:", err);
+        populateModelSelect([]);
+        morphCandidates = [];
+        updateFilterCounts();
+        rebuildCandidateSelect();
+        setCandidateStatus("Scan failed");
+      }
+    }
+
+    async function refreshCandidatesForModel(modelName) {
+      setCandidateStatus("Scanning...");
+      try {
+        const scanTarget = currentScanTarget;
+        const response = await fetch(
+          `${MORPH_CANDIDATES_URL}?scanTarget=${encodeURIComponent(scanTarget)}&model=${encodeURIComponent(modelName)}`,
+          { cache: "no-store" }
+        );
+        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
         const payload = await response.json();
         const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
-        populateCandidateSelect(candidates);
+        morphCandidates = candidates;
+        updateFilterCounts();
+        rebuildCandidateSelect();
         setCandidateStatus(`${candidates.length} found`);
       } catch (err) {
-        console.error("Failed to refresh morph candidates:", err);
-        populateCandidateSelect([]);
+        console.error("Failed to fetch candidates:", err);
+        morphCandidates = [];
+        updateFilterCounts();
+        rebuildCandidateSelect();
         setCandidateStatus("Scan failed");
       }
     }
@@ -934,18 +968,23 @@
     }
 
     scanTargetSelect.addEventListener("change", async () => {
-      await refreshMorphCandidates();
+      await refreshModels();
     });
 
     candidateRefreshButton.addEventListener("click", async () => {
-      await refreshMorphCandidates();
+      const selectedModel = modelSelect.value;
+      if (selectedModel) {
+        await refreshCandidatesForModel(selectedModel);
+      } else {
+        await refreshModels();
+      }
     });
 
     candidateLoadButton.addEventListener("click", async () => {
       await loadSelected();
     });
 
-    await refreshMorphCandidates();
+    await refreshModels();
 
     function animateFrame(time) {
       const deltaTime = (time - lastFrameTime) / 1000;

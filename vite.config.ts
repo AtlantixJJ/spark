@@ -18,7 +18,26 @@ type MorphCandidate = {
   vizDir: string;
 };
 
-function listSam3dgsMorphCandidates(fsRoot: string, scanTarget: "expr" | "expr-visualize" = "expr"): MorphCandidate[] {
+const SKIP_DIRS = new Set(["deprecated", "results", "results-old", "visualize"]);
+
+function listSam3dgsModels(fsRoot: string, scanTarget: "expr" | "expr-visualize" = "expr"): string[] {
+  const exprRoot = path.join(fsRoot, "expr");
+  if (!fs.existsSync(exprRoot) || !fs.statSync(exprRoot).isDirectory()) {
+    return [];
+  }
+  const baseDir = scanTarget === "expr-visualize"
+    ? path.join(exprRoot, "visualize")
+    : exprRoot;
+  if (!fs.existsSync(baseDir) || !fs.statSync(baseDir).isDirectory()) {
+    return [];
+  }
+  return fs.readdirSync(baseDir, { withFileTypes: true })
+    .filter(e => e.isDirectory() && !SKIP_DIRS.has(e.name))
+    .map(e => e.name)
+    .sort();
+}
+
+function listSam3dgsMorphCandidates(fsRoot: string, scanTarget: "expr" | "expr-visualize" = "expr", modelFilter?: string): MorphCandidate[] {
   const exprRoot = path.join(fsRoot, "expr");
   if (!fs.existsSync(exprRoot) || !fs.statSync(exprRoot).isDirectory()) {
     return [];
@@ -38,10 +57,30 @@ function listSam3dgsMorphCandidates(fsRoot: string, scanTarget: "expr" | "expr-v
       variant: "posed",
     },
     {
+      anchorSuffix: "_token_canonical_gs.ply",
+      deltaSuffixes: [],
+      variant: "token_canonical_gs",
+    },
+    {
+      anchorSuffix: "_fac_gs.ply",
+      deltaSuffixes: [],
+      variant: "fac",
+    },
+    {
+      anchorSuffix: "_image_gs.ply",
+      deltaSuffixes: [],
+      variant: "image_gs",
+    },
+    {
+      anchorSuffix: "_posed_gs.ply",
+      deltaSuffixes: [],
+      variant: "posed_gs",
+    },
+    {
       anchorSuffix: "_gs.ply",
       deltaSuffixes: [],
       variant: "gs",
-    }
+    },
   ];
 
   function scanDirectoryForPairs(targetDir: string) {
@@ -99,30 +138,31 @@ function listSam3dgsMorphCandidates(fsRoot: string, scanTarget: "expr" | "expr-v
     }
   }
 
-  function walk(currentDir: string, skipVisualizeDir: boolean) {
+  function walk(currentDir: string) {
     scanDirectoryForPairs(currentDir);
     const entries = fs.readdirSync(currentDir, { withFileTypes: true });
     for (const entry of entries) {
-      const absPath = path.join(currentDir, entry.name);
-      if (entry.name === "deprecated" || entry.name === "results" || entry.name === "results-old") {
-        continue;
-      }
-      if (skipVisualizeDir && entry.name === "visualize") {
+      if (SKIP_DIRS.has(entry.name)) {
         continue;
       }
       if (entry.isDirectory()) {
-        walk(absPath, skipVisualizeDir);
+        walk(path.join(currentDir, entry.name));
       }
     }
   }
 
-  if (scanTarget === "expr-visualize") {
-    const visualizeRoot = path.join(exprRoot, "visualize");
-    if (fs.existsSync(visualizeRoot) && fs.statSync(visualizeRoot).isDirectory()) {
-      walk(visualizeRoot, false);
+  const baseDir = scanTarget === "expr-visualize"
+    ? path.join(exprRoot, "visualize")
+    : exprRoot;
+  if (fs.existsSync(baseDir) && fs.statSync(baseDir).isDirectory()) {
+    if (modelFilter) {
+      const modelDir = path.join(baseDir, modelFilter);
+      if (fs.existsSync(modelDir) && fs.statSync(modelDir).isDirectory()) {
+        walk(modelDir);
+      }
+    } else {
+      walk(baseDir);
     }
-  } else {
-    walk(exprRoot, true);
   }
   candidates.sort((a, b) => {
     if (a.modelName !== b.modelName) {
@@ -303,16 +343,27 @@ export default defineConfig(({ mode }) => {
         name: "serve-local-files",
         configureServer(server) {
           const urlPrefix = "/local/";
+          const morphModelsUrl = "/sam3dgs/morph-models";
           const morphCandidatesUrl = "/sam3dgs/morph-candidates";
           const plyFilesUrl = "/sam3dgs/ply-files";
           const fsRoot = path.resolve(__dirname, "..", "..");
 
           server.middlewares.use((req, res, next) => {
             const url = req.url?.split("?")[0] ?? "";
-            if (url === morphCandidatesUrl) {
-              const rawScanTarget = new URLSearchParams(req.url?.split("?")[1] ?? "").get("scanTarget") ?? "expr";
+            const qs = new URLSearchParams(req.url?.split("?")[1] ?? "");
+            if (url === morphModelsUrl) {
+              const rawScanTarget = qs.get("scanTarget") ?? "expr";
               const scanTarget = rawScanTarget === "expr-visualize" ? "expr-visualize" : "expr";
-              const candidates = listSam3dgsMorphCandidates(fsRoot, scanTarget);
+              const models = listSam3dgsModels(fsRoot, scanTarget);
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ models }));
+              return;
+            }
+            if (url === morphCandidatesUrl) {
+              const rawScanTarget = qs.get("scanTarget") ?? "expr";
+              const scanTarget = rawScanTarget === "expr-visualize" ? "expr-visualize" : "expr";
+              const modelFilter = qs.get("model") ?? undefined;
+              const candidates = listSam3dgsMorphCandidates(fsRoot, scanTarget, modelFilter);
               res.setHeader("Content-Type", "application/json");
               res.end(JSON.stringify({ candidates }));
               return;
@@ -370,7 +421,8 @@ export default defineConfig(({ mode }) => {
           });
 
           console.log(`📁 Local files active: ${urlPrefix} → ${fsRoot}`);
-          console.log(`🧭 Morph candidates active: ${morphCandidatesUrl}`);
+          console.log(`🧭 Morph models active: ${morphModelsUrl}`);
+          console.log(`🧭 Morph candidates active: ${morphCandidatesUrl}?scanTarget=<t>&model=<name>`);
           console.log(`🔍 PLY file search active: ${plyFilesUrl}?scope=<rel-path>`);
         },
       },
