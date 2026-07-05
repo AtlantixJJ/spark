@@ -56,6 +56,8 @@
       backdrop-filter: blur(6px);
     }
     #scan-target-select,
+    #folder-browse,
+    #folder-clear,
     #model-select,
     #candidate-select,
     #candidate-refresh,
@@ -68,6 +70,89 @@
       height: 36px;
       box-sizing: border-box;
       font: inherit;
+    }
+    #folder-wrapper {
+      position: relative;
+    }
+    #folder-label {
+      color: #bbb;
+      font-size: 12px;
+      max-width: 150px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #folder-panel {
+      display: none;
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      z-index: 100;
+      width: 270px;
+      max-height: 360px;
+      padding: 8px;
+      box-sizing: border-box;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    }
+    #folder-panel.open {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    #folder-current {
+      color: #bbb;
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #folder-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 220px;
+      overflow: auto;
+    }
+    .folder-entry,
+    #folder-up,
+    #folder-select {
+      background: #161616;
+      color: #fff;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 0 8px;
+      min-height: 30px;
+      box-sizing: border-box;
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .folder-entry {
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .folder-entry:hover,
+    #folder-up:hover,
+    #folder-select:hover {
+      border-color: #555;
+    }
+    #folder-up:disabled,
+    #folder-clear:disabled {
+      color: #555;
+      cursor: default;
+      border-color: #2a2a2a;
+    }
+    #folder-actions {
+      display: flex;
+      gap: 6px;
+    }
+    #folder-actions button {
+      flex: 1;
     }
     #model-select {
       min-width: 140px;
@@ -295,6 +380,19 @@
       <option value="expr">expr (excl. visualize)</option>
       <option value="expr-visualize">expr/visualize</option>
     </select>
+    <div id="folder-wrapper">
+      <button id="folder-browse" type="button">Scope ▾</button>
+      <div id="folder-panel">
+        <div id="folder-current">expr</div>
+        <div id="folder-list"></div>
+        <div id="folder-actions">
+          <button id="folder-up" type="button">Up</button>
+          <button id="folder-select" type="button">Use Folder</button>
+        </div>
+      </div>
+    </div>
+    <button id="folder-clear" type="button" title="Clear folder scope">All</button>
+    <span id="folder-label">All folders</span>
     <select id="model-select">
       <option value="">All Models</option>
     </select>
@@ -369,6 +467,7 @@
 
     const MORPH_MODELS_URL = "/sam3dgs/morph-models";
     const MORPH_CANDIDATES_URL = "/sam3dgs/morph-candidates";
+    const MORPH_FOLDERS_URL = "/sam3dgs/morph-folders";
     const MAX_GS = 5;
 
     const scene = new THREE.Scene();
@@ -378,6 +477,15 @@
 
     const canvas = document.getElementById("canvas");
     const scanTargetSelect = document.getElementById("scan-target-select");
+    const folderWrapper = document.getElementById("folder-wrapper");
+    const folderBrowseButton = document.getElementById("folder-browse");
+    const folderPanel = document.getElementById("folder-panel");
+    const folderCurrent = document.getElementById("folder-current");
+    const folderList = document.getElementById("folder-list");
+    const folderUpButton = document.getElementById("folder-up");
+    const folderSelectButton = document.getElementById("folder-select");
+    const folderClearButton = document.getElementById("folder-clear");
+    const folderLabel = document.getElementById("folder-label");
     const modelSelect = document.getElementById("model-select");
     const candidateSelect = document.getElementById("candidate-select");
     const candidateRefreshButton = document.getElementById("candidate-refresh");
@@ -461,6 +569,7 @@
 
     document.getElementById("reset-camera-btn").addEventListener("click", () => {
       camera.position.set(0, 0, 2);
+      camera.up.set(0, 1, 0);
       orbitControls.target.set(0, 0, 0);
       orbitControls.update();
     });
@@ -528,13 +637,118 @@
 
     let morphCandidates = [];
     let currentScanTarget = "expr";
+    let selectedFolderScope = null;
+    let folderBrowserScope = "";
+
+    function hasFolderScope() {
+      return selectedFolderScope !== null;
+    }
+
+    function formatExprPath(scope) {
+      return scope ? `expr/${scope}` : "expr";
+    }
+
+    function updateFolderScopeLabel() {
+      if (!hasFolderScope()) {
+        folderLabel.textContent = "All folders";
+        folderLabel.title = "All folders";
+        folderClearButton.disabled = true;
+        return;
+      }
+      const label = formatExprPath(selectedFolderScope);
+      folderLabel.textContent = label;
+      folderLabel.title = label;
+      folderClearButton.disabled = false;
+    }
+
+    async function fetchJson(url) {
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText}`);
+      }
+      return response.json();
+    }
+
+    function setFolderPanelOpen(open) {
+      folderPanel.classList.toggle("open", open);
+    }
+
+    function renderFolderListing(listing) {
+      folderBrowserScope = listing.currentPath || "";
+      folderCurrent.textContent = formatExprPath(folderBrowserScope);
+      folderCurrent.title = folderCurrent.textContent;
+      folderUpButton.disabled = folderBrowserScope === "";
+      folderUpButton.dataset.parentPath = listing.parentPath || "";
+
+      folderList.innerHTML = "";
+      if (!Array.isArray(listing.folders) || listing.folders.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "folder-entry";
+        empty.textContent = "No subfolders";
+        empty.style.color = "#777";
+        folderList.appendChild(empty);
+        return;
+      }
+
+      for (const folder of listing.folders) {
+        const button = document.createElement("button");
+        button.className = "folder-entry";
+        button.type = "button";
+        button.textContent = folder.name;
+        button.title = formatExprPath(folder.path);
+        button.addEventListener("click", async () => {
+          try {
+            await loadFolderListing(folder.path);
+          } catch (err) {
+            console.error("Failed to browse child folder:", err);
+            setCandidateStatus("Browse failed");
+          }
+        });
+        folderList.appendChild(button);
+      }
+    }
+
+    async function loadFolderListing(scope) {
+      folderCurrent.textContent = "Loading...";
+      const query = encodeURIComponent(scope || "");
+      const listing = await fetchJson(`${MORPH_FOLDERS_URL}?scope=${query}`);
+      renderFolderListing(listing);
+    }
+
+    async function openFolderBrowser() {
+      if (folderPanel.classList.contains("open")) {
+        setFolderPanelOpen(false);
+        return;
+      }
+      setFolderPanelOpen(true);
+      await loadFolderListing(hasFolderScope() ? selectedFolderScope : folderBrowserScope);
+    }
+
+    async function selectBrowsedFolder() {
+      selectedFolderScope = folderBrowserScope;
+      updateFolderScopeLabel();
+      setFolderPanelOpen(false);
+      await refreshModels();
+    }
+
+    async function clearFolderScope() {
+      selectedFolderScope = null;
+      folderBrowserScope = "";
+      updateFolderScopeLabel();
+      setFolderPanelOpen(false);
+      await refreshModels();
+    }
 
     function populateModelSelect(models) {
       const prevValue = modelSelect.value;
       modelSelect.innerHTML = "";
       const placeholder = document.createElement("option");
       placeholder.value = "";
-      placeholder.textContent = models.length > 0 ? "Select a model" : "No models found";
+      placeholder.textContent = hasFolderScope()
+        ? "All in folder"
+        : models.length > 0
+          ? "Select a model"
+          : "No models found";
       modelSelect.appendChild(placeholder);
       for (const m of models) {
         const opt = document.createElement("option");
@@ -582,7 +796,7 @@
       candidateSelect.innerHTML = "";
       const placeholder = document.createElement("option");
       placeholder.value = "";
-      if (!modelSelect.value) {
+      if (!modelSelect.value && !hasFolderScope()) {
         placeholder.textContent = "Select a model first";
       } else {
         placeholder.textContent = filtered.length > 0 ? "Select candidate" : "No candidates match filter";
@@ -592,7 +806,17 @@
         const option = document.createElement("option");
         option.value = candidate.anchorPath;
         let shortLabel;
-        if (currentScanTarget === "expr-visualize") {
+        if (hasFolderScope()) {
+          const scopeRoot = formatExprPath(selectedFolderScope);
+          const vizDir = candidate.vizDir || "";
+          const relDir = vizDir === scopeRoot
+            ? ""
+            : vizDir.startsWith(`${scopeRoot}/`)
+              ? vizDir.slice(scopeRoot.length + 1)
+              : vizDir;
+          const filenameStem = candidate.fileName.replace(/\.ply$/i, "");
+          shortLabel = relDir ? `${relDir}/${filenameStem}` : filenameStem;
+        } else if (currentScanTarget === "expr-visualize") {
           // Show dataset/subject/filename path jointly
           const parts = (candidate.vizDir || "").split("/");
           const subPath = parts.slice(3).join("/"); // DATASET/SUBJECT (model dir is parts[2], already selected)
@@ -616,7 +840,7 @@
 
     modelSelect.addEventListener("change", async () => {
       const selectedModel = modelSelect.value;
-      if (!selectedModel) {
+      if (!selectedModel && !hasFolderScope()) {
         morphCandidates = [];
         updateFilterCounts();
         rebuildCandidateSelect();
@@ -651,16 +875,20 @@
       try {
         const scanTarget = scanTargetSelect.value || "expr";
         currentScanTarget = scanTarget;
-        const response = await fetch(`${MORPH_MODELS_URL}?scanTarget=${encodeURIComponent(scanTarget)}`, { cache: "no-store" });
-        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-        const payload = await response.json();
+        const params = new URLSearchParams({ scanTarget });
+        if (hasFolderScope()) params.set("scope", selectedFolderScope);
+        const payload = await fetchJson(`${MORPH_MODELS_URL}?${params.toString()}`);
         const models = Array.isArray(payload.models) ? payload.models : [];
         populateModelSelect(models);
         // Clear candidates since model selection was reset
         morphCandidates = [];
         updateFilterCounts();
         rebuildCandidateSelect();
-        setCandidateStatus(models.length > 0 ? `${models.length} model(s)` : "No models found");
+        if (hasFolderScope()) {
+          await refreshCandidatesForModel(modelSelect.value);
+        } else {
+          setCandidateStatus(models.length > 0 ? `${models.length} model(s)` : "No models found");
+        }
       } catch (err) {
         console.error("Failed to refresh models:", err);
         populateModelSelect([]);
@@ -674,13 +902,10 @@
     async function refreshCandidatesForModel(modelName) {
       setCandidateStatus("Scanning...");
       try {
-        const scanTarget = currentScanTarget;
-        const response = await fetch(
-          `${MORPH_CANDIDATES_URL}?scanTarget=${encodeURIComponent(scanTarget)}&model=${encodeURIComponent(modelName)}`,
-          { cache: "no-store" }
-        );
-        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-        const payload = await response.json();
+        const params = new URLSearchParams({ scanTarget: currentScanTarget });
+        if (modelName) params.set("model", modelName);
+        if (hasFolderScope()) params.set("scope", selectedFolderScope);
+        const payload = await fetchJson(`${MORPH_CANDIDATES_URL}?${params.toString()}`);
         const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
         morphCandidates = candidates;
         updateFilterCounts();
@@ -971,9 +1196,46 @@
       await refreshModels();
     });
 
+    folderBrowseButton.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      try {
+        await openFolderBrowser();
+      } catch (err) {
+        console.error("Failed to browse expr folders:", err);
+        setCandidateStatus("Browse failed");
+      }
+    });
+
+    folderPanel.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+
+    document.addEventListener("click", (event) => {
+      if (!folderWrapper.contains(event.target)) {
+        setFolderPanelOpen(false);
+      }
+    });
+
+    folderUpButton.addEventListener("click", async () => {
+      try {
+        await loadFolderListing(folderUpButton.dataset.parentPath || "");
+      } catch (err) {
+        console.error("Failed to browse parent folder:", err);
+        setCandidateStatus("Browse failed");
+      }
+    });
+
+    folderSelectButton.addEventListener("click", async () => {
+      await selectBrowsedFolder();
+    });
+
+    folderClearButton.addEventListener("click", async () => {
+      await clearFolderScope();
+    });
+
     candidateRefreshButton.addEventListener("click", async () => {
       const selectedModel = modelSelect.value;
-      if (selectedModel) {
+      if (selectedModel || hasFolderScope()) {
         await refreshCandidatesForModel(selectedModel);
       } else {
         await refreshModels();
@@ -984,6 +1246,7 @@
       await loadSelected();
     });
 
+    updateFolderScopeLabel();
     await refreshModels();
 
     function animateFrame(time) {
