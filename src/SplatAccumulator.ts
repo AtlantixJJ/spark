@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { FullScreenQuad } from "three/examples/jsm/postprocessing/Pass.js";
+import { FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 import { Readback } from "./Readback";
 import { SplatEdit } from "./SplatEdit";
 import {
@@ -186,6 +186,8 @@ export class SplatAccumulator {
   private saveRenderState(renderer: THREE.WebGLRenderer) {
     return {
       target: renderer.getRenderTarget(),
+      activeCubeFace: renderer.getActiveCubeFace(),
+      activeMipmapLevel: renderer.getActiveMipmapLevel(),
       xrEnabled: renderer.xr.enabled,
       autoClear: renderer.autoClear,
     };
@@ -195,11 +197,17 @@ export class SplatAccumulator {
     renderer: THREE.WebGLRenderer,
     state: {
       target: THREE.WebGLRenderTarget | null;
+      activeCubeFace: number;
+      activeMipmapLevel: number;
       xrEnabled: boolean;
       autoClear: boolean;
     },
   ) {
-    renderer.setRenderTarget(state.target);
+    renderer.setRenderTarget(
+      state.target,
+      state.activeCubeFace,
+      state.activeMipmapLevel,
+    );
     renderer.xr.enabled = state.xrEnabled;
     renderer.autoClear = state.autoClear;
   }
@@ -618,31 +626,31 @@ export class SplatAccumulator {
                   return unindentLines(`
                     int indexDiv8 = ${inputs.index} >> 3;
                     ivec3 coord = splatTexCoord(indexDiv8);
-                    uvec4 packed;
+                    uvec4 packedData;
                     if ((${inputs.index} & 4) == 0) {
-                      packed = texelFetch(${inputs.extSplats1}, coord, 0);
+                      packedData = texelFetch(${inputs.extSplats1}, coord, 0);
                     } else {
-                      packed = texelFetch(${inputs.extSplats2}, coord, 0);
+                      packedData = texelFetch(${inputs.extSplats2}, coord, 0);
                     }
 
                     int indexMod4 = ${inputs.index} & 3;
-                    uint data = (indexMod4 == 0) ? packed.x
-                      : (indexMod4 == 1) ? packed.y
-                      : (indexMod4 == 2) ? packed.z
-                      : packed.w;
+                    uint data = (indexMod4 == 0) ? packedData.x
+                      : (indexMod4 == 1) ? packedData.y
+                      : (indexMod4 == 2) ? packedData.z
+                      : packedData.w;
                     ${outputs.rgba8} = uintToVec4(data);
                   `);
                 }
                 return unindentLines(`
                   int indexDiv4 = ${inputs.index} >> 2;
                   ivec3 coord = splatTexCoord(indexDiv4);
-                  uvec4 packed = texelFetch(${inputs.extSplats1}, coord, 0);
+                  uvec4 packedData = texelFetch(${inputs.extSplats1}, coord, 0);
 
                   int indexMod4 = ${inputs.index} & 3;
-                  uint data = (indexMod4 == 0) ? packed.x
-                    : (indexMod4 == 1) ? packed.y
-                    : (indexMod4 == 2) ? packed.z
-                    : packed.w;
+                  uint data = (indexMod4 == 0) ? packedData.x
+                    : (indexMod4 == 1) ? packedData.y
+                    : (indexMod4 == 2) ? packedData.z
+                    : packedData.w;
                   ${outputs.rgba8} = uintToVec4(data);
                 `);
               },

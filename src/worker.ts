@@ -9,6 +9,7 @@ import init_wasm, {
   init_lod_tree,
   dispose_lod_tree,
   traverse_lod_trees,
+  dynamic_traverse_lod_trees,
   type ChunkDecoder,
   tiny_lod_packedsplats,
   bhatt_lod_packedsplats,
@@ -17,7 +18,7 @@ import init_wasm, {
   tiny_lod_extsplats,
   bhatt_lod_extsplats,
   get_lod_tree_level,
-} from "spark-worker-rs";
+} from "spark-rs";
 import type { ExtResult, PackedResult, SplatEncoding } from "./defines";
 
 const rpcHandlers = {
@@ -732,6 +733,7 @@ function traverseLodTrees({
   pixelScaleLimit,
   lastPixelLimit,
   instances,
+  traverseMode,
 }: {
   maxSplats: number;
   pixelScaleLimit: number;
@@ -750,6 +752,7 @@ function traverseLodTrees({
       coneFoveate: number;
     }
   >;
+  traverseMode: "dynamic" | "standard";
 }) {
   const keyInstances = Object.entries(instances);
   const lodIds = new Uint32Array(
@@ -782,7 +785,11 @@ function traverseLodTrees({
     keyInstances.map(([_key, instance]) => instance.coneFoveate),
   );
 
-  const result = traverse_lod_trees(
+  const lodFunction =
+    traverseMode === "dynamic"
+      ? dynamic_traverse_lod_trees
+      : traverse_lod_trees;
+  const result = lodFunction(
     maxSplats,
     pixelScaleLimit,
     lastPixelLimit,
@@ -868,14 +875,25 @@ function getTransferable(ctx: unknown): Transferable[] {
 }
 
 async function initialize() {
+  let resolveWaitForModule: (value: WebAssembly.Module) => void;
+  const waitForModule = new Promise<WebAssembly.Module>((resolve) => {
+    resolveWaitForModule = resolve;
+  });
+
   // Hold any messages received while initializing
   const pending: MessageEvent[] = [];
   const bufferMessage = (event: MessageEvent) => {
+    // Handle module
+    if (event.data.name === "init-wasm") {
+      resolveWaitForModule(event.data.module as WebAssembly.Module);
+      return;
+    }
+
     pending.push(event);
   };
   self.addEventListener("message", bufferMessage);
 
-  await init_wasm();
+  await init_wasm({ module_or_path: await waitForModule });
 
   self.removeEventListener("message", bufferMessage);
   self.addEventListener("message", onMessage);

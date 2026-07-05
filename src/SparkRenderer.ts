@@ -20,6 +20,7 @@ import {
   isMobile,
   isOculus,
   isVisionPro,
+  uploadU32DataTextureRows,
 } from "./utils";
 
 export interface SparkRendererOptions {
@@ -40,11 +41,6 @@ export interface SparkRendererOptions {
    * @default true
    */
   premultipliedAlpha?: boolean;
-  /**
-   * Whether to encode Gsplat with linear RGB (for environment mapping)
-   * @default false
-   */
-  encodeLinear?: boolean;
   /**
    * Pass in a THREE.Clock to synchronize time-based effects across different
    * systems. Alternatively, you can set the property time directly.
@@ -209,6 +205,7 @@ export interface SparkRendererOptions {
    * @default false
    */
   lodInflate?: boolean;
+  lodTraverseMode?: "dynamic" | "standard";
   /**
    * Whether to use extended Gsplat encoding for paged splats, useful for eliminating
    * quantization artifacts from splat scenes with large internal position coordinates.
@@ -227,35 +224,41 @@ export interface SparkRendererOptions {
    * @default 3
    */
   numLodFetchers?: number;
-  /* Full-width angle in degrees of fixed foveation cone along the view direction
+  /**
+   * Full-width angle in degrees of fixed foveation cone along the view direction
    * with no foveation applied (full resolution, foveate=1.0). Set to 0 to disable.
    * @default 90.0
    */
   coneFov0?: number;
-  /* Full-width angle in degrees of fixed foveation cone along the view direction
+  /**
+   * Full-width angle in degrees of fixed foveation cone along the view direction
    * with reduced resolution specified by `coneFoveate`. Foveation will be applied
    * smoothly from 1.0 down to `coneFoveate` as you move outward from
    * `coneFov0` to `coneFov`. Set to 0 to disable.
    * @default 120.0
    */
   coneFov?: number;
-  /* Foveation scale to apply to LoD splats at the edge of coneFov. Foveation will
+  /**
+   * Foveation scale to apply to LoD splats at the edge of coneFov. Foveation will
    * be applied smoothly from `coneFoveate` down to `behindFoveate` as you move
    * outward from `coneFov` to 180 degrees (behind the viewer).
    * @default 0.4
    */
   coneFoveate?: number;
-  /* Foveation scale to apply to LoD splats behind the viewer. Setting this to 0.1
+  /**
+   * Foveation scale to apply to LoD splats behind the viewer. Setting this to 0.1
    * for example will result in splats 10x larger than inside the viewing frustum.
    * @default 0.2
    */
   behindFoveate?: number;
-  /* How many LoD splats to generate for raycasting
+  /**
+   * How many LoD splats to generate for raycasting
    * @default 10000-25000 iff default canvas target is used
    */
   lodRaycast?: number;
   lodRaycastIntervalMs?: number;
-  /* Configures an offline render target for the SparkRenderer (as opposed to
+  /**
+   * Configures an offline render target for the SparkRenderer (as opposed to
    * rendering to the canvas). This is useful for rendering environment maps,
    * additional viewpoints, or video frame rendering.
    * @default undefined
@@ -284,30 +287,36 @@ export interface SparkRendererOptions {
      */
     superXY?: number;
   } & THREE.RenderTargetOptions;
-  /* Extra uniform values to pass to the shader.
+  /**
+   * Extra uniform values to pass to the shader.
    * @default undefined = no extra uniforms
    */
   extraUniforms?: Record<string, unknown>;
-  /* Replace the default `splatVertex.glsl` splat shader with a custom one.
+  /**
+   * Replace the default `splatVertex.glsl` splat shader with a custom one.
    * @default undefined = use the default `splatVertex.glsl` shader
    */
   vertexShader?: string;
-  /* Replace the default `splatFragment.glsl` splat shader with a custom one.
+  /**
+   * Replace the default `splatFragment.glsl` splat shader with a custom one.
    * @default undefined = use the default `splatFragment.glsl` shader
    */
   fragmentShader?: string;
-  /* Set the splat shader material to be transparent which determines if the
+  /**
+   * Set the splat shader material to be transparent which determines if the
    * splats are rendered during the first opaque THREE.js render pass or the
    * second transparent render pass.
    * @default undefined = true
    */
   transparent?: boolean;
-  /* Set the splat shader material to enable depth testing which determines if the
+  /**
+   * Set the splat shader material to enable depth testing which determines if the
    * splats respect the Z depth buffer and blend with other opaque objects in the scene.
    * @default undefined = true
    */
   depthTest?: boolean;
-  /* Set the splat shader material to enable depth writing which determines if the
+  /**
+   * Set the splat shader material to enable depth writing which determines if the
    * splats write to the Z depth buffer. Note that enabling this may produce
    * undesirable results because most of the Gsplat is transparent.
    * @default undefined = false
@@ -316,10 +325,9 @@ export interface SparkRendererOptions {
 }
 
 export class SparkRenderer extends THREE.Mesh {
-  renderer: THREE.WebGLRenderer;
-  premultipliedAlpha: boolean;
-  material: THREE.ShaderMaterial;
-  uniforms: ReturnType<typeof SparkRenderer.makeUniforms>;
+  readonly renderer: THREE.WebGLRenderer;
+  readonly material: THREE.ShaderMaterial;
+  readonly uniforms: ReturnType<typeof SparkRenderer.makeUniforms>;
 
   autoUpdate: boolean;
   preUpdate: boolean;
@@ -341,7 +349,6 @@ export class SparkRenderer extends THREE.Mesh {
   falloff: number;
   clipXY: number;
   focalAdjustment: number;
-  encodeLinear: boolean;
 
   sortRadial: boolean;
   minSortIntervalMs: number;
@@ -377,6 +384,7 @@ export class SparkRenderer extends THREE.Mesh {
   lodSplatScale: number;
   lodRenderScale: number;
   lodInflate: boolean;
+  lodTraverseMode: "dynamic" | "standard";
   pagedExtSplats: boolean;
   maxPagedSplats: number;
   numLodFetchers: number;
@@ -494,7 +502,6 @@ export class SparkRenderer extends THREE.Mesh {
     this.renderer = options.renderer;
     this.onDirty = options.onDirty;
     this.dirty = true;
-    this.premultipliedAlpha = premultipliedAlpha;
     this.autoUpdate = options.autoUpdate ?? true;
     this.preUpdate = options.preUpdate ?? true;
 
@@ -513,7 +520,6 @@ export class SparkRenderer extends THREE.Mesh {
     this.falloff = options.falloff ?? 1.0;
     this.clipXY = options.clipXY ?? 1.4;
     this.focalAdjustment = options.focalAdjustment ?? 1.0;
-    this.encodeLinear = options.encodeLinear ?? false;
 
     this.sortRadial = options.sortRadial ?? true;
     this.minSortIntervalMs = options.minSortIntervalMs ?? 0;
@@ -526,6 +532,7 @@ export class SparkRenderer extends THREE.Mesh {
     this.lodSplatScale = options.lodSplatScale ?? 1.0;
     this.lodRenderScale = options.lodRenderScale ?? 1.0;
     this.lodInflate = options.lodInflate ?? false;
+    this.lodTraverseMode = options.lodTraverseMode ?? "standard";
     this.pagedExtSplats = options.pagedExtSplats ?? false;
     const defaultPages = isMobile() ? (isIos() ? 96 : 128) : 256;
     this.maxPagedSplats = options.maxPagedSplats ?? defaultPages * 65536;
@@ -553,6 +560,16 @@ export class SparkRenderer extends THREE.Mesh {
     this.current = this.display;
     this.accumulators.push(new SplatAccumulator(accumulatorOptions));
     this.accumulators.push(new SplatAccumulator(accumulatorOptions));
+
+    // Check if the provoking vertex convention should be changed
+    const provokingVertexExt = this.renderer
+      .getContext()
+      .getExtension("WEBGL_provoking_vertex");
+    if (provokingVertexExt) {
+      provokingVertexExt.provokingVertexWEBGL(
+        provokingVertexExt.FIRST_VERTEX_CONVENTION_WEBGL,
+      );
+    }
 
     if (options.target) {
       const {
@@ -589,7 +606,6 @@ export class SparkRenderer extends THREE.Mesh {
           targetOptions,
         );
       }
-      this.encodeLinear = options.encodeLinear ?? true;
     }
   }
 
@@ -718,21 +734,30 @@ export class SparkRenderer extends THREE.Mesh {
     const isNewFrame = frame !== spark.lastFrame;
     spark.lastFrame = frame;
 
-    if (spark.target) {
-      spark.renderSize.set(spark.target.width, spark.target.height);
-    } else {
-      const renderSize = renderer.getDrawingBufferSize(spark.renderSize);
-      if (renderer.xr.isPresenting) {
-        if (renderSize.x === 1 && renderSize.y === 1) {
-          // WebXR mode on Apple Vision Pro returns 1x1 when presenting.
-          // Use a different means to figure out the render size.
-          const baseLayer = renderer.xr.getSession()?.renderState.baseLayer;
-          if (baseLayer) {
-            renderSize.x = baseLayer.framebufferWidth;
-            renderSize.y = baseLayer.framebufferHeight;
-          }
+    // Determine render target
+    const currentRenderTarget = renderer.getRenderTarget();
+    const isXRRenderTarget = checkIsXRRenderTarget(currentRenderTarget);
+    if (currentRenderTarget) {
+      spark.renderSize.set(
+        currentRenderTarget.width,
+        currentRenderTarget.height,
+      );
+
+      // WebXR mode on Apple Vision Pro returns 1x1 when presenting.
+      // Use a different means to figure out the render size.
+      if (
+        isXRRenderTarget &&
+        spark.renderSize.x === 1 &&
+        spark.renderSize.y === 1
+      ) {
+        const baseLayer = renderer.xr.getSession()?.renderState.baseLayer;
+        if (baseLayer) {
+          spark.renderSize.x = baseLayer.framebufferWidth;
+          spark.renderSize.y = baseLayer.framebufferHeight;
         }
       }
+    } else {
+      renderer.getDrawingBufferSize(spark.renderSize);
     }
     this.uniforms.renderSize.value.copy(spark.renderSize);
 
@@ -774,7 +799,15 @@ export class SparkRenderer extends THREE.Mesh {
     this.uniforms.falloff.value = spark.falloff;
     this.uniforms.clipXY.value = spark.clipXY;
     this.uniforms.focalAdjustment.value = spark.focalAdjustment;
-    this.uniforms.encodeLinear.value = spark.encodeLinear;
+
+    const outputColorSpace =
+      currentRenderTarget === null
+        ? renderer.outputColorSpace
+        : isXRRenderTarget
+          ? currentRenderTarget.texture.colorSpace
+          : THREE.ColorManagement.workingColorSpace;
+    this.uniforms.encodeLinear.value =
+      outputColorSpace !== THREE.SRGBColorSpace;
 
     this.uniforms.ordering.value =
       spark.orderingTexture ?? SparkRenderer.emptyOrdering;
@@ -1052,34 +1085,16 @@ export class SparkRenderer extends THREE.Mesh {
       this.orderingTexture = orderingTexture;
     } else {
       const renderer = this.renderer;
-      const gl = renderer.getContext() as WebGL2RenderingContext;
       if (!renderer.properties.has(this.orderingTexture)) {
         this.orderingTexture.needsUpdate = true;
       } else {
-        const props = renderer.properties.get(this.orderingTexture) as {
-          __webglTexture: WebGLTexture;
-        };
-        const glTexture = props.__webglTexture;
-        if (!glTexture) {
-          throw new Error("ordering texture not found");
-        }
-        renderer.state.activeTexture(gl.TEXTURE0);
-        renderer.state.bindTexture(gl.TEXTURE_2D, glTexture);
-        gl.bindBuffer(gl.PIXEL_UNPACK_BUFFER, null);
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-        gl.texSubImage2D(
-          gl.TEXTURE_2D,
-          0,
-          0,
-          0,
+        uploadU32DataTextureRows(
+          renderer,
+          this.orderingTexture,
           4096,
           rows,
-          gl.RGBA_INTEGER,
-          gl.UNSIGNED_INT,
-          // data,
           result.ordering,
         );
-        renderer.state.bindTexture(gl.TEXTURE_2D, null);
       }
     }
 
@@ -1428,6 +1443,7 @@ export class SparkRenderer extends THREE.Mesh {
       pixelScaleLimit,
       lastPixelLimit: this.lastPixelLimit,
       instances,
+      traverseMode: this.lodTraverseMode,
     })) as {
       keyIndices: Record<
         string,
@@ -1554,6 +1570,10 @@ export class SparkRenderer extends THREE.Mesh {
         instance.texture.dispose();
         this.lodInstances.delete(mesh);
       }
+    }
+
+    if (oldest.splats instanceof PagedSplats) {
+      this.pager?.removeSplats(oldest.splats);
     }
 
     await worker.call("disposeLodTree", { lodId: oldest.lodId });
@@ -2067,4 +2087,19 @@ export class SparkRenderer extends THREE.Mesh {
       "Only LoD-enabled PackedSplats and ExtSplats are supported",
     );
   }
+
+  get premultipliedAlpha(): boolean {
+    return this.material.premultipliedAlpha;
+  }
+
+  set premultipliedAlpha(value: boolean) {
+    if (this.material.premultipliedAlpha !== value) {
+      this.material.premultipliedAlpha = value;
+      this.material.needsUpdate = true;
+    }
+  }
+}
+
+function checkIsXRRenderTarget(renderTarget: THREE.RenderTarget | null) {
+  return (renderTarget as unknown as Record<string, boolean>)?.isXRRenderTarget;
 }
