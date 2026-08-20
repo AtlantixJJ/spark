@@ -107,7 +107,6 @@ export declare function isIos(): boolean;
 export declare function isVisionPro(): boolean;
 export declare function flipPixels(pixels: Uint8Array, width: number, height: number): Uint8Array;
 export declare function pixelsToPngUrl(pixels: Uint8Array, width: number, height: number): string;
-export declare function cloneClock(clock: THREE.Clock): THREE.Clock;
 export declare function omitUndefined<T extends object>(obj: T): Partial<T>;
 export declare const IDENT_VERTEX_SHADER: string;
 export declare function averagePositions(positions: THREE.Vector3[]): THREE.Vector3;

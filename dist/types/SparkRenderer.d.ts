@@ -21,11 +21,10 @@ export interface SparkRendererOptions {
      */
     premultipliedAlpha?: boolean;
     /**
-     * Pass in a THREE.Clock to synchronize time-based effects across different
-     * systems. Alternatively, you can set the property time directly.
-     * (default: new THREE.Clock)
+     * Pass in a THREE.Timer to to synchronize time-based effects across different
+     * systems.
      */
-    clock?: THREE.Clock;
+    timer?: THREE.Timer;
     /**
      * Controls whether to check and automatically update Gsplat collection
      * each frame render.
@@ -317,8 +316,8 @@ export declare class SparkRenderer extends THREE.Mesh {
     focalAdjustment: number;
     sortRadial: boolean;
     minSortIntervalMs: number;
-    clock: THREE.Clock;
-    time?: number;
+    readonly timer: THREE.Timer;
+    private readonly ownsTimer;
     lastFrame: number;
     updateTimeoutId: number;
     onDirty?: () => void;
